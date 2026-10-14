@@ -63,7 +63,10 @@ export const cadenceTimes = (r: Rendered) => {
 /** Reverb-to-dry per bar (dB). Pass: every sounding bar >= 10 dB under. */
 export const reverbCheck = (r: Rendered, sr: number) => {
   const bpb = beatsPerBar(r.piece.plan.meter), total = r.piece.plan.sections.reduce((a, s) => a + s.bars * bpb, 0), bars: number[] = [];
+  // a bar inside a declared breath (authored silence) holds only the ring-out of the phrase before it: not judged, as in the ghost guard
+  const rest = (b: number) => (r.piece.arrangement ?? []).some((x) => x.kind === "breath" && b >= x.from * bpb && b < (x.from + x.bars) * bpb);
   for (let b = 0; b < total; b += bpb) {
+    if (rest(b)) continue;
     const a = Math.round(r.perf.sec(b) * sr), e = Math.min(r.L.length, Math.round(r.perf.sec(b + bpb) * sr)); let ew = 0, ed = 0;
     for (let c = 0; c < 2; c++) for (let i = a; i < e; i++) { ew += r.wet[c][i] ** 2; ed += r.dry[c][i] ** 2; }
     if (ed > 1e-9) bars.push(10 * Math.log10((ew + 1e-12) / ed));
@@ -113,9 +116,15 @@ export const maskingCheck = (piece: Piece, sr: number, o: { seconds?: number; te
 };
 
 /** Everything at once for a rendered piece. */
+/** The documented exemption, in seconds: each declared breath section (authored silence), padded 1 ms so a
+ *  ghost window whose edge IS the breath edge still counts as inside it. guardReport passes these to ghostCheck. */
+export const breathSpans = (r: Pick<Rendered, "piece" | "perf">, bpb: number): [number, number][] =>
+  (r.piece.arrangement ?? []).filter((x) => x.kind === "breath").map((x) => [r.perf.sec(x.from * bpb) - 1e-3, r.perf.sec((x.from + x.bars) * bpb) + 1e-3]);
+
 export const guardReport = (r: Rendered, sr: number, seconds: number, o: { masking?: boolean; cache?: VoiceCache; /** each role's band energy, rendered elsewhere (a worker pool) from maskingPlan */ bands?: Partial<Record<Role, number[]>> } = {}) => {
   const bpb = beatsPerBar(r.piece.plan.meter);
-  const ghost = ghostCheck([r.L, r.R], sr, { bpm: r.tempo, beatsPerBar: bpb, wet: r.wet, dry: r.dry, cadences: cadenceTimes(r) });
+  const breaths = breathSpans(r, bpb);
+  const ghost = ghostCheck([r.L, r.R], sr, { bpm: r.tempo, beatsPerBar: bpb, wet: r.wet, dry: r.dry, cadences: cadenceTimes(r), breaths });
   return { ghost: { pass: ghost.pass, failures: ghost.failures, windows: ghost.windows.length, minOnsetsPerBeat: Math.min(...ghost.windows.map((w) => w.onsetsPerBeat)), maxSustainedShare: Math.max(...ghost.windows.map((w) => w.sustainedShare)) }, reverb: reverbCheck(r, sr), masking: o.masking === false ? null : o.bands ? maskingFromBands(maskingPlan(r.piece, { seconds, tempo: r.tempo, perf: r.perf })!, o.bands) : maskingCheck(r.piece, sr, { seconds, tempo: r.tempo, perf: r.perf, cache: o.cache }), lufs: loudness([r.L, r.R], sr).integrated };
 };
 

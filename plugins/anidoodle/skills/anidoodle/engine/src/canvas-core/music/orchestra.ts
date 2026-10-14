@@ -84,11 +84,13 @@ const timpaniLegacy = (keys: Played[], sr: number, n: number, o: Opts, r: Rng): 
 /** Lead synth: monophonic saw + square, portamento `glide` s between touching notes, a filter envelope re-struck each note, vibrato blooming on long notes (spec 06 lead). */
 export const leadSynth = (keys: Played[], sr: number, n: number, o: Opts): Out => {
   const out = out0(n), glide = num(o, "glide", 0.03), cut = num(o, "cut", 1700), envAmt = num(o, "env", 4500), sq = num(o, "square", 0.4), [gl, gr] = pan(num(o, "pan", 0));
+  // vibrato depth (fraction of pitch), rate (Hz) and onset (s): defaults are the original voice, bit for bit; a theremin wants ~0.02 at 6 Hz from 0.08 s
+  const vDepth = num(o, "vibrato", 0.006), vHz = num(o, "vibHz", 5.5), vAt = num(o, "vibAt", 0.3), vRise = num(o, "vibRise", 0.4);
   const ks = keys.slice().sort((a, b) => a.t - b.t); let prevF = 0, prevOff = -1, ph = 0, ph2 = 0; const lp = new SVF(sr, cut, 1.2);
   ks.forEach((k, idx) => {
     const f = f0(k.p), i0 = Math.round(k.t * sr), nextT = idx + 1 < ks.length ? ks[idx + 1].t : Infinity, dur = Math.min(k.off, nextT) - k.t, tail = nextT < k.off + 0.12 ? nextT - k.t : dur + 0.12;
     const len = Math.min(n - i0, Math.ceil(Math.max(0.01, tail) * sr)), from = prevF && k.t - prevOff < 0.05 ? prevF : f;
-    for (let i = 0; i < len; i++) { const t = i / sr, fr = from + (f - from) * Math.min(1, t / Math.max(1e-4, glide)), vib = t > 0.3 ? 1 + 0.006 * Math.sin(TAU * 5.5 * t) * Math.min(1, (t - 0.3) / 0.4) : 1, inc = (fr * vib) / sr;
+    for (let i = 0; i < len; i++) { const t = i / sr, fr = from + (f - from) * Math.min(1, t / Math.max(1e-4, glide)), vib = t > vAt ? 1 + vDepth * Math.sin(TAU * vHz * t) * Math.min(1, (t - vAt) / vRise) : 1, inc = (fr * vib) / sr;
       ph += inc; if (ph >= 1) ph -= 1; ph2 += inc; if (ph2 >= 1) ph2 -= 1;
       const e = Math.min(1, t / 0.006) * (t < dur ? 1 : Math.exp(-(t - dur) / 0.03));
       if ((i & 15) === 0) lp.set(clamp(cut + envAmt * k.v * Math.exp(-t / 0.18), 150, 14000), 1.2);
