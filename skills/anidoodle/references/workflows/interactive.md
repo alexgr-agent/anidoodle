@@ -10,6 +10,7 @@ Three worked demos. Each is one self-contained HTML file that opens offline:
 |---|---|
 | **Landing mascot** (`mascotHero`) | Bit watches your pointer anywhere on the page, eyes first and head a beat later. Hover or Tab to a button and he turns, presents it with his near arm, raises his brows and brightens his bulb. Press: a crouch. Click "Get started": he jumps and cheers, with pencil twinkles. "Take the tour" gets a wave, and poking him makes him giggle. |
 | **Scroll-drawn hero** (`scrollHero`) | The storybook plate draws itself as you scroll: construction ovals, a head-first pencil sketch, washes spreading from where the brush lands, then the final line, with a pencil or brush at the nib throughout. Scroll back and it un-draws. The last frame is the plate itself, pixel for pixel. |
+| **Machine explorer** (`mechanismExplorer`) | A music box movement plays its tune. Hover, focus or press "Take it apart" and it comes apart outside-in, each assembly on its own bouncy spring; point at a part and it lights, and the readout says what it does. Built on `machines.md`. |
 | **Form mascot** (`formMascot`) | He reads your caret, nodding at each keystroke, and shuts his eyes with hands up for the password. Press "Show" and he is caught peeking. A bad submit gets a worried head-shake. "Busy" whirs his key, and success is the cheer. |
 
 All three use the storybook plate's hand (pencil + watercolour). Bit is drawn by the plate's own
@@ -34,7 +35,7 @@ proves it for every emitted page.
 | Can a drawn frame change later? | No. An event is stamped after every tick already drawn: `max(lastDrawn + 1, clock)`. |
 | Initial configuration? | It is in the log at tick 0, before anything is drawn: target rectangles, scroll, reduced motion, state and device scale. |
 | Resize, DPR? | Log coordinates are in the piece's logical space, so a resize logs new `rect`s and a `view` (the device scale), and changes no state. The host re-bakes at the new scale in the background and swaps on a frame boundary. |
-| Interrupted motion? | Springs are critically damped and closed form. A target is a pure function of the discrete state, which only changes at events. Position and velocity carry across an interruption into a new exact segment. |
+| Interrupted motion? | Springs are closed form, critically damped by default; `zeta: 0.8` to `0.9` lands with one faint overshoot, the weight of a real part. A target is a pure function of the discrete state, which only changes at events. Position and velocity carry across an interruption into a new exact segment. |
 | One-shot reactions? | Fixed-length clips restarted by each trigger (`clip(s, "click:start", 72)`), with randomness seeded from the log (`reactionSeed`). |
 | Keyboard? | Keyboard focus counts as hover (`attention` is the more recent of the two), and Enter or Space is a click. Every hover reaction has a focus equivalent. |
 | Touch? | A tap logs its position. A lifted finger logs `exit` and `leave`, so nothing stays hovered. |

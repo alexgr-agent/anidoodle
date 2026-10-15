@@ -27,6 +27,8 @@ review when the person wants that step; otherwise build from it.
 - **Captions are drawn lettering** (`lettering.ts`, `drafting.ts`, a style's own hand), sized for
   the smallest shape the piece ships in. Keep them short enough to read twice in their time on
   screen.
+- **A mechanism beats a diagram.** When the idea has moving parts, build it as a real machine that
+  comes apart and reads out its own state, in whichever style the piece uses: `machines.md`.
 - **A recurring guide** (a mascot, a hand, an object) gives continuity across chapters; build it
   once as a character module.
 - **Charts are drawn to scale** from the ledger's numbers, labelled with the values they reach,

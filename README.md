@@ -163,7 +163,7 @@ Ask how to draw something, or bring a drawing, and anidoodle rebuilds it as a le
 | For | You get |
 |---|---|
 | **Your website** | A hero illustration, spot art for each feature, empty states and a 404, all in one hand. Transparent PNGs at any size from one source, so retina and print come free. |
-| **Explainers and reports** | How-it-works diagrams, cutaways and animated infographics, labelled in drafted lettering. Chalkboard, blueprint and ballpoint suit the serious ones. |
+| **Explainers and reports** | How-it-works diagrams, cutaways and animated infographics, labelled in drafted lettering. Chalkboard, blueprint and ballpoint suit the serious ones. An idea can become a working machine that plays, takes itself apart and folds back, drawn in any style. |
 | **Your brand** | A logo that draws itself on, a title sequence, a social card template that stays on brand for every post. |
 | **Social and chat** | Endless loops, GIFs and transparent animated stickers, sized for the feed. |
 | **Decks and docs** | A family of section illustrations from one program. A new seed gives a sister image in the same style. |

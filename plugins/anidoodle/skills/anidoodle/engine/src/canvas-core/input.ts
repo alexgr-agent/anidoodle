@@ -63,6 +63,8 @@ export type Discrete = {
 
 export type SpringSpec = {
   omega: number;                                // rad per tick. 0.2 settles in ~0.4 s; 0.08 is lazy
+  zeta?: number;                                // damping ratio. Omitted or 1: critically damped, no overshoot. 0.85 to 0.9: lands
+                                                // with one faint overshoot, the weight of a real part (an exploded view, a sprung button)
   target: (d: Discrete) => number | P;          // MUST depend on d only: that is what makes it closed form
 };
 export type InputSpec = { springs: Record<string, SpringSpec>; init?: Partial<Pick<Discrete, "state" | "scroll" | "reduced">> };
@@ -108,8 +110,15 @@ const apply = (d: Discrete, e: InputEvent) => {
 type Seg = { t0: number; tgt: number[]; x0: number[]; v0: number[] };
 const vec = (v: number | P): number[] => (typeof v === "number" ? [v] : [v[0], v[1]]);
 const unvec = (a: number[]): number | P => (a.length === 1 ? a[0] : [a[0], a[1]]);
-const evalSeg = (s: Seg, w: number, t: number): { x: number[]; v: number[] } => {
+const evalSeg = (s: Seg, w: number, t: number, z = 1): { x: number[]; v: number[] } => {
   const dt = t - s.t0; if (dt <= 0) return { x: s.tgt.map((g, i) => g + s.x0[i]), v: s.v0.slice() };
+  if (z < 1) { // underdamped, still closed form: x(t) = g + e^(-z w t) (A cos wd t + B sin wd t)
+    const wd = w * Math.sqrt(1 - z * z), ex = Math.exp(-z * w * dt), co = Math.cos(wd * dt), si = Math.sin(wd * dt);
+    return {
+      x: s.tgt.map((g, i) => { const A = s.x0[i], B = (s.v0[i] + z * w * A) / wd; return g + ex * (A * co + B * si); }),
+      v: s.tgt.map((_, i) => { const A = s.x0[i], B = (s.v0[i] + z * w * A) / wd; return ex * ((B * wd - z * w * A) * co - (A * wd + z * w * B) * si); }),
+    };
+  }
   const e = Math.exp(-w * dt);
   return {
     x: s.tgt.map((g, i) => { const c = s.v0[i] + w * s.x0[i]; return g + (s.x0[i] + c * dt) * e; }),
@@ -141,7 +150,7 @@ const advance = (spec: InputSpec, log: InputLog, f: Fold, to: number) => {
       const g = vec(s.target(f.d)), seg = f.segs[k];
       if (same(g, seg.tgt)) continue;                                   // untouched springs keep their segment: bit-identical either way
       if (f.d.reduced) { f.segs[k] = { t0: e.tick, tgt: g, x0: g.map(() => 0), v0: g.map(() => 0) }; continue; } // reduced motion: arrive, do not travel
-      const { x, v } = evalSeg(seg, s.omega, e.tick);                   // where it is and how fast, at the interruption
+      const { x, v } = evalSeg(seg, s.omega, e.tick, s.zeta);                   // where it is and how fast, at the interruption
       f.segs[k] = { t0: e.tick, tgt: g, x0: x.map((xi, i) => xi - g[i]), v0: v };
     }
     f.ref = e; f.idx++;
@@ -162,7 +171,7 @@ export const stateAt = (tick: number, log: InputLog, spec: InputSpec): InputStat
   for (let b = (k + 1) * CP; b <= t; b += CP) { advance(spec, log, f, b); if (cps.length === b / CP) cps.push(cloneFold(f, b)); }
   advance(spec, log, f, t);
   const spring: Record<string, number | P> = {}, vel: Record<string, number | P> = {};
-  for (const [k2, s] of Object.entries(spec.springs)) { const r = evalSeg(f.segs[k2], s.omega, t); spring[k2] = unvec(r.x); vel[k2] = unvec(r.v); }
+  for (const [k2, s] of Object.entries(spec.springs)) { const r = evalSeg(f.segs[k2], s.omega, t, s.zeta); spring[k2] = unvec(r.x); vel[k2] = unvec(r.v); }
   return { ...f.d, tick: t, attention: attentionOf(f.d), spring, vel };
 };
 

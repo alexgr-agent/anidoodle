@@ -35,7 +35,7 @@ say why in one line. Write the answers into a short brief before drawing.
 | A picture that draws itself (timelapse, making-of) | `references/workflows/drawing-process.md` |
 | A loop, sticker, animated logo, ambient header | Loop workflow below, `references/formats.md` |
 | A story film, any length | Film workflow below, `references/workflows/long-film.md` |
-| An explainer or an infographic | `references/workflows/explainer.md` |
+| An explainer or infographic; a machine that comes apart to explain an idea, in any style | `references/workflows/explainer.md`, `references/workflows/machines.md` |
 | A launch or product video (their screenshots welcome) | `references/workflows/launch-video.md`; build it on `references/workflows/launch-video-kit.md` |
 | An interactive web animation that reacts to the UI | `references/workflows/interactive.md` |
 | A drawing lesson, or "how do I draw this?" | `references/workflows/teach-drawing.md` |

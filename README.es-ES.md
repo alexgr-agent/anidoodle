@@ -156,7 +156,7 @@ Pregunta cómo dibujar algo, o trae un dibujo, y anidoodle lo reconstruye como l
 | Para | Obtienes |
 |---|---|
 | **Tu web** | Una ilustración de cabecera, ilustraciones para cada funcionalidad, estados vacíos y un 404, todo de la misma mano. PNG transparentes a cualquier tamaño desde una sola fuente, así que retina e impresión salen gratis. |
-| **Explicativos e informes** | Diagramas de cómo funciona, vistas en sección e infografías animadas, rotuladas con letras trazadas a mano. La tiza, el plano técnico y el bolígrafo van bien para los más serios. |
+| **Explicativos e informes** | Diagramas de cómo funciona, vistas en sección e infografías animadas, rotuladas con letras trazadas a mano. La tiza, el plano técnico y el bolígrafo van bien para los más serios. Una idea puede convertirse en una máquina que funciona, se desmonta y vuelve a montarse, dibujada en cualquier estilo. |
 | **Tu marca** | Un logo que se dibuja solo, una secuencia de títulos, una plantilla de tarjeta social que mantiene tu marca en cada publicación. |
 | **Redes y chat** | Loops sin fin, GIFs y stickers animados transparentes, con el tamaño justo para el feed. |
 | **Presentaciones y documentos** | Una familia de ilustraciones de sección desde un solo programa. Una nueva semilla da una imagen hermana en el mismo estilo. |

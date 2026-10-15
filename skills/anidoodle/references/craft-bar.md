@@ -6,6 +6,9 @@ The test: would a proud human illustrator ship this, or is it mechanical shape-a
 |---|---|
 | A subject built from ellipses and capsules | Hand-placed control points over real anatomy |
 | One style recoloured to look like another | The mark, the edge and the order of marks all change |
+| Boxes and arrows standing for an idea | A real machine whose working IS the idea, many small parts, each with a job (`machines.md`) |
+| A line that stops in the air; a texture cut dead mid-surface | Every line ends on something; a row of ribs or pins fades as the surface turns away |
+| Parts floating off or sunk into each other | Every joint flush, tangent or seated, every part held; check the joints at 3x |
 | Flat colour fields | Wash, then pattern wet-on-damp, then line; one named light; cast shadows |
 | Every stroke the same weight and speed | Long strokes fast, fiddly ones slow, thick-thin, tapered |
 | Even scatter, one flower stamped 200 times | Hand-placed drifts with bare rests; 4-5 authored views per species |

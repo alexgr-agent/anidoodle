@@ -156,7 +156,7 @@ Demandez comment dessiner quelque chose, ou apportez un de vos dessins, et anido
 | Pour | Vous obtenez |
 |---|---|
 | **Votre site web** | Une illustration d'en-tête, des vignettes pour chaque fonctionnalité, des états vides et une page 404, tout de la même main. Des PNG transparents à toute taille depuis une seule source, donc les écrans Retina et l'impression sont couverts d'office. |
-| **Explications et rapports** | Des schémas de fonctionnement, des vues en coupe et des infographies animées, légendés en lettrage technique. La craie, le plan technique et le stylo bille conviennent aux sujets sérieux. |
+| **Explications et rapports** | Des schémas de fonctionnement, des vues en coupe et des infographies animées, légendés en lettrage technique. La craie, le plan technique et le stylo bille conviennent aux sujets sérieux. Une idée peut devenir une machine qui fonctionne, se démonte et se remonte, dessinée dans n'importe quel style. |
 | **Votre marque** | Un logo qui se dessine tout seul, un générique, un gabarit de carte sociale qui reste fidèle à votre marque à chaque publication. |
 | **Réseaux sociaux et messagerie** | Des boucles infinies, des GIF et des stickers animés transparents, aux bonnes dimensions pour le fil d'actualité. |
 | **Présentations et documents** | Une famille d'illustrations de section issues d'un seul programme. Une nouvelle graine donne une image sœur dans le même style. |
