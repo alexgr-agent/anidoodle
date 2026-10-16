@@ -21,6 +21,8 @@ export type Film = { meta: {
   locked?: [from: number, to: number, reason: string][];
   // a declared hold: the stillness is meant (a word read, an end card); the optional reason is printed by the gate
   holds?: [from: number, to: number, reason?: string][];
+  /** silences the film means (a stop-down before a reveal, a held breath), [fromFrame, toFrame, reason]: verify-export does not count them as holes */
+  quiet?: [from: number, to: number, reason?: string][];
   onTwos?: boolean;
   step?: 1 | 2 | 3;
   // the score as fitted to this film: its tempo and form; render prints it next to the grid's bpm.
@@ -42,7 +44,7 @@ export const validate = (film: Film): string[] => {
   if (![W, H, fps, durationFrames].every((n) => Number.isSafeInteger(n) && n > 0)) p.push("W, H, fps and durationFrames must be positive integers");
   if (!Number.isFinite(bpm) || bpm <= 0 || !Number.isInteger(beat)) p.push(`bpm ${bpm} at ${fps} fps does not give a whole-frame beat`);
   if (film.meta.step !== undefined && ![1, 2, 3].includes(film.meta.step)) p.push("step must be 1, 2 or 3");
-  for (const [from, to] of [...(film.meta.holds ?? []), ...(film.meta.locked ?? [])]) if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to > durationFrames || to <= from) p.push(`invalid declared range ${from}-${to}`);
+  for (const [from, to] of [...(film.meta.holds ?? []), ...(film.meta.locked ?? []), ...(film.meta.quiet ?? [])]) if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to > durationFrames || to <= from) p.push(`invalid declared range ${from}-${to}`);
   for (const [, , reason] of film.meta.locked ?? []) if (!reason?.trim()) p.push("locked ranges need a reason");
   let t = 0;
   [...film.shots].sort((a, b) => a.start - b.start).forEach((s) => {

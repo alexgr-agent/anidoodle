@@ -28,7 +28,7 @@ import type { Film } from "./film";
 import { isometricHand } from "./mechanismHands";
 import {
   Cam, V3, P2, Material, Item, prism, box, rrect, circle, turned, cyl, sphere, frameAlong, at, facingAt, screw, slab, leverRing, tubeAlong, stroke, fill,
-  paintAll, sharesAt, ExplodePlan, card, smooth, clamp01, add, setReveal, tone, ink, inkDot, knock, Hand, setHand, flatHand, hand, freshPen,
+  paintAll, sharesAt, ExplodePlan, spin, hull, disc as circleOn, card, smooth, clamp01, add, setReveal, tone, ink, inkDot, knock, Hand, setHand, flatHand, hand, freshPen,
 } from "./mechanismKit";
 
 const W = 1080, H = 1080, FPS = 30, N = 310, N_DRAW = 350;
@@ -75,7 +75,7 @@ const CUES = [{ t: T.apart / FPS, apart: true }, { t: T.home / FPS, apart: false
 const REV = 9.6; // seconds per drum turn: 0.3 s a step
 /** drum angle: it turns while the movement is whole and playing */
 const rotAt = (f: number) => { const run = (a: number, b: number) => Math.max(0, Math.min(f, b) - a); const fr = run(T.play, T.apart) + run(T.home + 30, N); return (fr / FPS / REV) * 2 * Math.PI; };
-export type State = { rot: number; shares: Record<string, number>; lit: string; read: string; bend: number[]; fan: number; crank: number };
+export type State = { rot: number; shares: Record<string, number>; lit: string; read: string; bend: number[]; fan: number; crank: number; blur?: number };
 /** what the drum is doing at angle rot: how far each tooth bends, and which pin last spoke. One model for pins, teeth and words. */
 export const play = (rot: number, quiet = 0) => {
   const bend = TEETH.map(() => 0), turn = rot % (2 * Math.PI); let last = -1;
@@ -106,6 +106,7 @@ export const stateAt = (f: number): State => {
 };
 
 // ---------------------------------------------------------------- the parts list
+const circleAt = (c: Cam, o: V3, r: number, off: P2) => circleOn(c, o, [0, 0, 1], r, 40, off);
 const vane = (psi: number, side: number): P2[] => { const c = Math.cos(psi), s = Math.sin(psi), e = 0.22; const pts: [number, number][] = side > 0 ? [[0.5, -e], [4.6, -e], [4.6, e], [0.5, e]] : [[-4.6, -e], [-0.5, -e], [-0.5, e], [-4.6, e]]; return pts.map(([x, y]) => [60 + x * c - y * s, 12 + x * s + y * c] as P2); };
 const bar = (ctx: Ctx, c: Cam, x0: number, x1: number, yR: number, yT: number, z0: number, z1: number, dz: number, m: Material, off: P2) => {
   const P = (x: number, y: number, z: number): P2 => { const s = c.p([x, y, z + (y < yR ? dz * ((yR - y) / (yR - yT)) ** 1.6 : 0)]); return [s[0] + off[0], s[1] + off[1]]; };
@@ -195,7 +196,10 @@ const parts = (c: Cam, s: State): Item[] => {
     const F = frameAlong([60, 12, 19.4], [0, 0, 1]); turned(ctx, c, F, cyl(0, 4, 1.5), M("governor", STEEL), { off: o, lit: lit("governor") });
     const KS = Math.round(20 / (hand().coarse ?? 1)); for (let i = 0; i < 9; i++) { const z0 = 0.3 + i * 0.42; for (let k = 0; k < KS; k++) { const th0 = (k / KS) * 2 * Math.PI + s.fan * 0.15, th1 = th0 + (2 * Math.PI) / KS, f = facingAt(c, F, (th0 + th1) / 2); if (f < 0.05) continue; const A = c.p(at(F, z0 + (k / KS) * 0.42, 1.5, th0)), B = c.p(at(F, z0 + ((k + 1) / KS) * 0.42, 1.5, th1)); ink(ctx, [[A[0] + o[0], A[1] + o[1]], [B[0] + o[0], B[1] + o[1]]], "seam", STEEL, false, smooth(0.05, 0.5, f)); } }
   }, "governor");
-  [1, -1].forEach((side) => { const ring = vane(s.fan, side), mid = ring.reduce((a, q) => [a[0] + q[0] / 4, a[1] + q[1] / 4], [0, 0]); put(`vane${side}`, [mid[0], mid[1], 26.5], (ctx, o) => prism(ctx, c, ring, 24.6, 4.2, M("governor", ZINC), { off: o, lit: lit("governor") }), "governor", 0); });
+  // the fan turns nine times a drum turn; with `blur` (radians of trail) it reads as spinning, not as a still cut-out
+  const sweep = (s.blur ?? 0), disc = (ctx: Ctx, o: P2) => () => tone(ctx, hull([...circleAt(c, [60, 12, 24.6], 4.6, o), ...circleAt(c, [60, 12, 28.8], 4.6, o)]), M("governor", ZINC), 4); // one shape: see-through bands would stack into stripes
+  [1, -1].forEach((side) => { const ring = vane(s.fan, side), mid = ring.reduce((a, q) => [a[0] + q[0] / 4, a[1] + q[1] / 4], [0, 0]); put(`vane${side}`, [mid[0], mid[1], 26.5], (ctx, o) => spin(s.fan, sweep, (ang) => prism(ctx, c, vane(ang, side), 24.6, 4.2, M("governor", ZINC), { off: o, lit: lit("governor") }), { disc: side > 0 ? disc(ctx, o) : undefined }), "governor", 0); });
+  /** the music box at rest on a page, playing: every part home, the drum turning, the fan a blur */
   put("hub", [60, 12, 26.7], (ctx, o) => turned(ctx, c, frameAlong([60, 12, 24.4], [0, 0, 1]), cyl(0, 4.6, 0.95), M("governor", STEEL), { off: o }), "governor", 0.05);
   put("gcap", [60, 12, 30.6], (ctx, o) => turned(ctx, c, frameAlong([60, 12, 30.2], [0, 0, 1]), cyl(0, 0.8, 1.3), STEEL, { off: o }), "governor", 2);
   // travel lines: a chain line from where a part sits to where it went, drawn under everything that moved
@@ -260,6 +264,16 @@ export const paintFigure = (ctx: Ctx, s: State, hint: string, o: { cam?: Cam; bu
   return CAM;
 };
 export const camApart = APART;
+/** the box at home, playing at drum angle `rot`, the fan's trail `blur` radians long (site art and loops) */
+/** the pins that have just plucked their teeth at drum angle `rot`: which tooth, where its tip is, how long ago (s) */
+export const plucks = (rot: number, within = 1.2) => PINS.flatMap((p) => {
+  const since = (((rot - p.step * DSTEP) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI), age = (since / (2 * Math.PI)) * REV;
+  return age < within ? [{ tooth: p.tooth, age, tip: [toothX(p.tooth) + 0.67, TIP, 8.4] as V3 }] : [];
+});
+// the key turns back once a drum turn as the spring runs down, so a loop shows the whole motor working
+export const playing = (rot: number, blur = 0): State => { const pl = play(rot); return { rot, shares: Object.fromEntries(PLAN.order.map((id) => [id, 0])), lit: "drum", read: pl.read, bend: pl.bend, fan: pl.fan, crank: Math.PI * 0.3 - rot, blur }; };
+/** every corner of the box at home, for fitting a camera to a region */
+export const homePoints: V3[] = [...BENCH, [60, 12, 31], [74, 22, 18], [10, 11, 24]];
 /** the run: it plays (the camera close on the pins), comes apart, tours its parts, folds home, plays on */
 export const drawMechanism = (ctx: Ctx, f: number, env: Env) => {
   ctx.setTransform(env.scale, 0, 0, env.scale, 0, 0);

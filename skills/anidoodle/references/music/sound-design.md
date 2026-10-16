@@ -120,6 +120,37 @@ music, and its test only checked that they existed.)
   when it starts the groove and mud anywhere else.
 - Hear it in context before it ships. Render the kit page (`node tools/sfx.mjs kit <dir>`) and a
   demo over the real score, and check the audibility table.
+- **The numbers that keep it designed.** About five effects per ten seconds. Hard cuts and cursor
+  drifts get nothing. About two whooshes a film, each starting 100-450 ms before the move and peaking
+  on its fastest frame. One riser, then 0.1-0.5 s of near silence, then the impact on the reveal frame,
+  the loudest moment of the film, 30-60% of the way in. One click voice for the whole UI: press, then
+  release 60-110 ms later, the same level every time. Typing at most about twelve keys a second.
+- **Where a cue may land.** A hit's attack no earlier than 45 ms before its frame and its peak no
+  later than 75 ms after. A whoosh's loudest point within 45 ms of the move's fastest frame. A riser
+  ends between 250 ms before the hit and 30 ms after it. Later than these reads as lag; earlier reads
+  as a mistake.
+- **The ending.** The music stops on a bar or filters down, 0.2-0.7 s of near silence, one soft note
+  in key, and its tail rings out to the last frame, 8-20 dB under the film's peak. Never a cut-off.
+
+## The finished mix
+
+What the whole film's sound must be before it ships, score and effects together:
+
+- **On its loudness target.** The delivery master (`music/delivery.ts`, the last stage of `mixSfx` and
+  `mixLaunch`) sets one static gain to -16 LUFS (gentle) or -14 (dense, launch films), then a smooth
+  true-peak limiter with its work capped (4 dB gentle, 6 dense): past the cap the gain gives way
+  instead of the hits being squashed, and the shortfall is reported. `master: "none"` keeps the old
+  peak-only ceiling. A score-only film keeps its own master (music/README.md, Master).
+- **Never digital silence.** An effects-only film sits on room tone 22 dB under its cues (`bed`), nearly
+  mono so a phone keeps it, from the first frame to the last.
+- **A finished shape.** Sound from the first frame (within 0.5 s), no hole over 0.25 s, the last sound
+  within 0.5 s of the last frame. A silence the film means (a stop-down, a held breath) is declared in
+  `meta.quiet` as `[fromFrame, toFrame, reason]`. `verify-export --delivery` fails the shape, a true
+  peak over -1 dBTP after the encode, and loudness under -19 LUFS; it warns from -17.
+- **Fix one thing at a time, with one fixer.** Read the film through separate lenses (sync, edges and
+  clicks, masking, tone, the director's arc), each proposing its fix as a variant it has measured.
+  Then one fixer merges them and re-runs every check, and a fix that breaks another lens is dropped.
+  Lenses that each edit the mix fight: a tonal cut at 2-6 kHz undoes the masking lens's raised hit.
 
 ## Tools and checks
 

@@ -10,6 +10,7 @@
 // and one impact, at the big reveal only, and nothing at all on its other cuts.
 import { placeSfx, sfxDuck, sfxAudibility, type SfxCue, type SfxPlan, type SfxAudibility, type PlacedCue } from "./music/sfx";
 import { limiter } from "./music/render";
+import { deliver, layBed } from "./music/delivery";
 import { loudness, truePeak } from "./music/meter";
 import type { FilmAudio } from "./film";
 
@@ -45,7 +46,10 @@ export const mixLaunch = (music: [Float32Array, Float32Array] | null, plan: Laun
   }
   const L = new Float32Array(n), R = new Float32Array(n);
   for (let i = 0; i < n; i++) { L[i] = mL[i] + fxL[i]; R[i] = mR[i] + fxR[i]; }
-  limiter(L, R, sr, Math.pow(10, -1.3 / 20));
+  // no score: the cues sit on room tone instead of dropping to silence between them (delivery.ts)
+  if (!music && plan.bed !== false && placed.length) layBed(L, R, [fxL, fxR], sr, plan.cues.length * 7919 + plan.frames, plan.bed ?? 22);
+  // a launch film is dense: the whole mix to -14 LUFS, then the ceiling (delivery.ts); plan.master overrides
+  if ((plan.master ?? "dense") === "none") limiter(L, R, sr, Math.pow(10, -1.3 / 20)); else deliver(L, R, sr, plan.master ?? "dense", { ceilingDb: -1.3 });
   const tp0 = truePeak([L, R]).dbtp; if (tp0 > -1.05) { const g = Math.pow(10, (-1.1 - tp0) / 20); for (let i = 0; i < n; i++) { L[i] *= g; R[i] *= g; } }
   const fade = Math.min(n, Math.round(0.015 * sr)); for (let i = 0; i < fade; i++) { const g = i / fade; L[n - 1 - i] *= g; R[n - 1 - i] *= g; }
   const lu = n >= 0.4 * sr ? loudness([L, R], sr).integrated : NaN;

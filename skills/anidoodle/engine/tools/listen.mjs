@@ -91,7 +91,7 @@ const DARK = `--bg: #101814; --fg: #eef3ef; --panel: #18231e; --line: #33443b; -
 // from Google Fonts and nothing else off-box; every colour a variable, dark repeated both ways.
 const STYLE = `  :root {
     --bg: #f3f5f1; --fg: #14201b; --panel: #ffffff; --line: #c9d3cc; --accent: #0f6b52; --accent-fg: #ffffff;
-    --display: "Fraunces", Georgia, serif; --body: "Figtree", system-ui, sans-serif;
+    --display: "Poppins", system-ui, sans-serif; --body: "Poppins", system-ui, sans-serif;
   }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${DARK} } }
   :root[data-theme="dark"] { ${DARK} }
@@ -139,7 +139,7 @@ const takeCard = (t) => `    <div class="take">
       <audio data-piece="${esc(t.piece)}" controls preload="auto" src="${esc(t.file)}"></audio>
     </div>`;
 const page = (title, intro, pieces) => `<title>${esc(title)}</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Figtree:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap">
 <style>
 ${STYLE}
 </style>

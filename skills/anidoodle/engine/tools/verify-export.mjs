@@ -36,6 +36,7 @@ import { basename, resolve } from "node:path";
 import { defaultOutput, requireFilm } from "./names.mjs";
 import { firstFrameBlank } from "./thumb.mjs";
 import { mono, onsetNear, xcorrOffset } from "./avsync.mjs";
+import { filmShape } from "./filmshape.mjs";
 
 const VAL = new Set(["file", "adapter", "width", "first-frame", "tol", "fidelity-psnr", "scale", "frame", "sync-tol"]);
 const pos = [], opt = {};
@@ -117,6 +118,10 @@ if (isMp4) {
     for (let i = 0; i < dL.length; i++) { dL[i] = di[2 * i]; dR[i] = di[2 * i + 1]; }
     const master = await s.audio(SR), mb = Buffer.from(master.float32, "base64"), mi = new Float32Array(mb.buffer.slice(mb.byteOffset, mb.byteOffset + mb.byteLength)), mL = new Float32Array(master.frames), mR = new Float32Array(master.frames);
     for (let i = 0; i < master.frames; i++) { mL[i] = mi[2 * i]; mR[i] = mi[2 * i + 1]; }
+    // the shape of a finished piece: sound from the first frame, no hole, no dead air after it stops
+    const shape = filmShape(dL, dR, SR, { fps: meta.fps, quiet: meta.quiet });
+    for (const [from, to, why] of meta.quiet ?? []) if (why) note(`QUIET ${from}-${to}: ${why}`, "a declared silence");
+    say(shape.problems.length === 0, `the sound has a finished shape (starts ${shape.firstS.toFixed(1)} s, longest hole ${shape.holeS.toFixed(1)} s, dead air at the end ${shape.endS.toFixed(1)} s)`, shape.problems.map((p) => p.msg).join("; ") || "sound from the start, no hole over 0.25 s, the last sound within 0.5 s of the end");
     const ref = mono(mL, mR), got = mono(dL, dR), tol = Number(opt["sync-tol"] ?? 1);
     const marks = meta.sync?.length ? meta.sync : [0.25, 0.5, 0.75].map((q) => ({ frame: Math.round(q * N), label: `${Math.round(q * 100)} % in` }));
     if (!meta.sync?.length) note("no sync markers in meta.sync", "checking three points of the mix instead (a launch template film names its presses and its impact)");
@@ -137,7 +142,14 @@ if (isMp4) {
     const eb = spawnSync("ffmpeg", ["-v", "info", "-nostats", "-i", file, "-map", "0:a:0", "-af", "ebur128=peak=true", "-f", "null", "-"], { encoding: "utf8", maxBuffer: 1 << 26 });
     const txt = eb.stdout + eb.stderr, tp = Number((txt.match(/True peak:\s*\n\s*Peak:\s*(-?[0-9.]+|-inf) dBFS/) ?? [])[1]), il = Number((txt.match(/Integrated loudness:\s*\n\s*I:\s*(-?[0-9.]+) LUFS/) ?? [])[1]);
     if (!Number.isFinite(tp)) note("true peak unreadable from ffmpeg's ebur128", txt.split("\n").slice(-4).join(" "));
-    else if (opt.delivery) say(tp <= -1.0, `true peak after the encode ${tp.toFixed(2)} dBTP`, `ceiling -1 dBTP; integrated ${Number.isFinite(il) ? il.toFixed(1) : "?"} LUFS`);
+    else if (opt.delivery) {
+      say(tp <= -1.0, `true peak after the encode ${tp.toFixed(2)} dBTP`, `ceiling -1 dBTP; integrated ${Number.isFinite(il) ? il.toFixed(1) : "?"} LUFS`);
+      // a film that plays quiet reads unfinished: -16 LUFS for gentle films, -14 for dense, a 1 LU window around each
+      // -19 is the floor: a gentle score held under -16 by its own peaks (never compressed, by design) may sit near
+      // -17.5; under -19 the film is simply quiet. Warn from -17 so the musical cure ("Peaks", music/README.md) is tried
+      say(Number.isFinite(il) && il >= -19 && il <= -13, `integrated loudness ${Number.isFinite(il) ? il.toFixed(1) : "?"} LUFS`, "-19..-13 (the delivery master puts gentle films at -16, dense at -14)");
+      if (Number.isFinite(il) && il < -17 && il >= -19) note(`quiet: ${il.toFixed(1)} LUFS`, "its peaks hold it down: in a score, stagger the bass under the loudest downbeat and roll the big chord (music/README.md, Peaks); in effects, soften the sharpest cue's attack or lower it a little so the rest can come up");
+    }
     else note(`true peak after the encode ${tp.toFixed(2)} dBTP${tp > -1 ? "  (over -1: --delivery fails this)" : ""}`, `integrated ${Number.isFinite(il) ? il.toFixed(1) : "?"} LUFS`);
   }
 }

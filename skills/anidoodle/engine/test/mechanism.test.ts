@@ -2,7 +2,7 @@
 // light ladder is monotone, the springs are exact closed forms, an exploded view staggers out and folds
 // back last-out-first-home, hatching stays inside its shape, and the music box's words come from its pins.
 //   node tools/test.mjs mechanism
-import { Cam, level, springAt, sharesAt, type ExplodePlan, hand, flatHand } from "../src/canvas-core/mechanismKit";
+import { Cam, level, springAt, sharesAt, type ExplodePlan, hand, flatHand, spin } from "../src/canvas-core/mechanismKit";
 import { Iso } from "../src/canvas-core/isometricKit";
 import { hatchSegs } from "../src/canvas-core/mechanismHands";
 import { play, PLAN, REV } from "../src/canvas-core/mechanism";
@@ -64,4 +64,9 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
   ok(loop.read === first.read && loop.bend.every((v, i) => near(v, first.bend[i], 0.05)), "the drum's story repeats every turn");
   ok(REV > 0 && hand().id === "flat", "the kit's default hand is the plain reference hand");
   void flatHand;
+
+  // 7. spin: a slow turn draws the blades once; a fast one trails fainter copies behind, against the travel
+  const calls = (sweep: number) => { const a: number[] = []; spin(1, sweep, (ang) => a.push(ang)); return a; };
+  ok(calls(0).length === 1 && calls(0)[0] === 1, "a slow turn draws only the blades");
+  const fast = calls(1.2); ok(fast.length === 5 && fast[fast.length - 1] === 1 && fast.slice(0, -1).every((v) => v < 1), `a fast turn trails ${fast.length - 1} copies behind the blades, drawn first`);
 };

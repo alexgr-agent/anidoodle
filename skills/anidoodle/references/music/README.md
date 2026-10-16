@@ -115,6 +115,8 @@ MusicPlan + notes (you write)  ->  perform  ->  instruments (one stem per part) 
      2:1 bus glue) exists but is off by default: Alex's call. If the peak still blocks the gain, the loudness goes
      down. The cure is musical (see "Peaks" below): a solo piano with a 10 LU range (the nocturne demo) masters at -17.5.
    - **Dense styles** (lofiElectronic, lofi, drive, house, synthwave, hipHop, rock, chiptune): **-14 LUFS** through a look-ahead true-peak limiter, then a static trim if an inter-sample peak still passes -1 dBTP.
+   - **A film's whole mix** (score plus effects, or effects alone) goes through the delivery master last:
+     `sound-design.md`, The finished mix.
 
 A film's `audio` is `filmAudio(piece, seconds)`, which returns `(sampleRate) => [L, R]` at exactly
 the film's length. It fits the score first (`fitScore`, below), so the music ends on its phrase at

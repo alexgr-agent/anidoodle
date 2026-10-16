@@ -61,7 +61,8 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
   // loaded by git show and bundled with these fixtures before the mixer was edited.
   const hashes = ["5db7c646b1e61b0016c5dd8a114e875f6cedbaed17f6b702a225ba2dcc187a85", "3064c924f76acb857c509a5c294cf043380451d544fda0b5372ce06d33ef133a", "3a42c3f453a9a1a0285bd2287bc9874e6e330fc3bd6baa263587e10443eaa94e"];
   const frozen = frozenPlans(sr);
-  frozen.plans.forEach((p, i) => { const m = mixSfx(frozen.music, p, sr), f = filmSfx(() => frozen.music, p)(sr);
+  // the old peak-only master stays bit-identical when asked for; the loudness master is tested in delivery.test.ts
+  frozen.plans.forEach((p0, i) => { const p = { ...p0, master: "none" as const }, m = mixSfx(frozen.music, p, sr), f = filmSfx(() => frozen.music, p)(sr);
     ok(hash(m.L, m.R) === hashes[i] && hash(...f) === hashes[i], `launch cue plan ${i}: mixSfx and filmSfx match base SHA-256 ${hashes[i]}`);
   });
   for (const row of survey()) ok(row.ok, `${row.kind}:${row.variant} over ${row.context}: default gain passes the measured default caps`);
