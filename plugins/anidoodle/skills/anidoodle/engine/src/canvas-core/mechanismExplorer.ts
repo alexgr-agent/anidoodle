@@ -45,7 +45,7 @@ export const mechanismExplorer: Piece = {
     const shares = Object.fromEntries(PLAN.order.map((id) => [id, Math.max(0, s.spring[id] as number)])), mean = PLAN.order.reduce((a, id) => a + shares[id], 0) / PLAN.order.length;
     const rot = s.reduced ? 0.4 : ((tick % LOOP) / LOOP) * 2 * Math.PI, pl = play(rot, Math.min(1, mean * 3));
     const state: State = { rot, shares, lit: "drum", read: pl.read, bend: pl.bend, fan: pl.fan, crank: pl.crank };
-    if (mean > 0.02 && mean < 0.9) state.read = (s.spring[PLAN.order[0]] as number) > 0.5 ? "TAKING APART" : "PUTTING BACK";
+    if (mean > 0.02 && mean < 0.9) state.read = (s.spring[PLAN.order[0]] as number) > 0.5 ? "EXPLODING" : "REASSEMBLING";
     if (mean >= 0.9 && s.pointer) { // the part under the pointer: the nearest assembly, where it is now
       let best = Infinity;
       for (const id of PLAN.order) { const q: P2 = CAM.p(add(HOME[id], mul(MOVE[id], shares[id]))), d = Math.hypot(q[0] - s.pointer[0], q[1] - s.pointer[1]); if (d < best) { best = d; state.lit = id; } }

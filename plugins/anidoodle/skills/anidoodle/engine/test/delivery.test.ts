@@ -1,6 +1,6 @@
 // DELIVERY TESTS. The whole film mix lands on its loudness target under the -1 dBTP ceiling, a quiet
-// effects-only film is brought up instead of shipping at -27 LUFS, the limiter's work is capped (the gain
-// gives way and says so), and "none" leaves the mix alone.
+// effects-only film is brought to the target, the limiter's work is capped (the gain gives way and says
+// so), and "none" leaves the mix alone.
 //   node tools/test.mjs delivery
 import { deliver, targetOf } from "../src/canvas-core/music/delivery";
 import { loudness, truePeak } from "../src/canvas-core/music/meter";
@@ -25,11 +25,11 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
   ok(d3.gainDb === 0 && L3.every((v, i) => v === before[i]), "none leaves the mix untouched");
   ok(Math.abs(loudness(tone(0.01), sr).integrated - loudness(tone(0.01), sr).integrated) < 1e-12, "the master is deterministic in, deterministic out");
 
-  // an effects-only film used to ship wherever its cues fell; now it is delivered at the gentle target
+  // an effects-only film is delivered at the gentle target
   const fx = mixSfx(null, { fps: 30, frames: 120, cues: [{ frame: 10, kind: "tick" }, { frame: 40, kind: "pop" }, { frame: 80, kind: "impact" }] } as never, sr);
   ok(fx.delivered !== undefined && fx.dbtp <= -1 + 1e-6, `effects-only mix: delivered (${fx.lufs.toFixed(1)} LUFS, ${fx.dbtp.toFixed(2)} dBTP, limiter ${fx.limiterDb.toFixed(1)} dB)`);
   const old = mixSfx(null, { fps: 30, frames: 120, master: "none", cues: [{ frame: 10, kind: "tick" }, { frame: 40, kind: "pop" }, { frame: 80, kind: "impact" }] } as never, sr);
-  ok(Math.abs(fx.lufs + 16) <= 0.5, `on target, where the old peak-only master left it wherever its cues fell (${old.lufs.toFixed(1)} LUFS)`);
+  ok(Math.abs(fx.lufs + 16) <= 0.5, `on target (the peak-only master gives ${old.lufs.toFixed(1)} LUFS)`);
   void truePeak;
 
   // between its cues an effects-only film sits on room tone, never on digital silence

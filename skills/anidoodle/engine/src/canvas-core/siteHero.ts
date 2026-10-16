@@ -1,8 +1,8 @@
-// SITE HERO. The music box as art for a landing page: placed right of a headline (assetKit PLACEMENTS.heroRight),
-// on the page's own colour, the part to watch in the brand colour, light and dark from one source. Its motion
-// is the object working: the drum plays one full turn, the teeth lift and drop, the air brake spins to a blur.
-// One drum turn is the whole loop, so it repeats without a seam; frame 0 is the rest pose a reduced-motion
-// visitor sees, so it is composed as the hero frame.
+// SITE HERO. The music box as art for a landing page: placed right of a headline (assetKit PLACEMENTS.heroSide),
+// on the page's own colour, the part to watch in the brand colour, light and dark from one source. It moves only
+// as the real box would: the drum plays one full turn, the teeth lift and drop, the air brake spins to a blur.
+// One drum turn is the whole loop, so it repeats without a seam. Frame 0, the resting pose, is all a
+// reduced-motion visitor gets, so it is laid out to stand on its own as the finished picture.
 import type { Ctx, Env } from "./core";
 import type { Film } from "./film";
 import { Cam, paintAll, setHand, setPalette, flatHand, hand, freshPen, rrect } from "./mechanismKit";
@@ -10,7 +10,7 @@ import { isometricHand } from "./mechanismHands";
 import { parts, playing, homePoints, MOVE, REV } from "./mechanism";
 import { PLACEMENTS, fitBox, pagePalette, type Colour } from "./assetKit";
 
-const FPS = 30, N = Math.round(REV * FPS), P = PLACEMENTS.heroRight;
+const FPS = 30, N = Math.round(REV * FPS), P = PLACEMENTS.heroSide;
 // the fan turns nine times a drum turn; a trail of about a fifth of a second of its travel reads as speed
 const BLUR = ((2 * Math.PI * 9) / REV) * 0.2;
 

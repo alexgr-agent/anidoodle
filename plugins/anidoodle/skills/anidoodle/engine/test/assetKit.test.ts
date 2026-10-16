@@ -2,7 +2,7 @@
 // its own hue, a page palette keeps every material's light order on a light page and on a dark one, the
 // brand lands only on the part to watch, and a placement's art region never overlaps its headline zone.
 //   node tools/test.mjs assetKit
-import { toLab, fromLab, rampFrom, pagePalette, isDark, PLACEMENTS, fitBox } from "../src/canvas-core/assetKit";
+import { toLab, fromLab, rampFrom, pagePalette, isDark, PLACEMENTS, fitBox, strongPoint } from "../src/canvas-core/assetKit";
 import type { Material } from "../src/canvas-core/mechanismKit";
 
 export const name = "assetKit";
@@ -34,8 +34,8 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
     ok(!near(p(watch).pigment!, z.pigment!) && Math.abs(hue(p(watch).pigment!) - hue("#3d7bff")) < 0.12, `on ${paper}: the part to watch takes the brand`);
     ok(near(p({ ...zinc }).ramp[2], z.ramp[2]), `on ${paper}: a plain part does not`);
   }
-  const ink = pagePalette({ paper: "#faf7f2", colours: { zinc: { hex: "#e4572e", mode: "ink" } } })(zinc);
-  ok(Math.abs(hue(ink.ink) - hue("#e4572e")) < 0.12 && near(ink.ramp[2], pagePalette({ paper: "#faf7f2" })(zinc).ramp[2]), "ink mode colours the lines and leaves the body neutral");
+  const ink = pagePalette({ paper: "#faf7f2", colours: { zinc: { hex: "#e4572e", mode: "lines" } } })(zinc);
+  ok(Math.abs(hue(ink.ink) - hue("#e4572e")) < 0.12 && near(ink.ramp[2], pagePalette({ paper: "#faf7f2" })(zinc).ramp[2]), "lines mode colours the lines and leaves the part neutral");
   ok(near(pagePalette({ paper: "#f3f0e8" })(zinc).ramp[2], zinc.ramp[2]), "on the kit's own paper nothing moves");
 
   // 4. placements
@@ -44,4 +44,7 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
     ok(x0 >= 0 && y0 >= 0 && x1 <= p.W && y1 <= p.H && x1 > x0 && y1 > y0, `${id}: the fit box lies inside the canvas`);
     if (s) ok(x1 <= s.x || x0 >= s.x + s.w || y1 <= s.y || y0 >= s.y + s.h, `${id}: the art never overlaps the headline zone`);
   }
+  const st = PLACEMENTS.heroStack, [sx] = strongPoint(st), side = PLACEMENTS.heroSide, [hx] = strongPoint(side);
+  ok(Math.abs(sx - (st.art.x + st.art.w / 2)) < 1e-9, "words above: the moment sits on the centre line");
+  ok(Math.abs(hx - (side.art.x + side.art.w / 3)) < 1e-9, "words on the left: the moment leans a third toward them");
 };

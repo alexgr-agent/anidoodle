@@ -1,8 +1,8 @@
-// SOUNDSHEET. A listening sheet for an agent that cannot hear: one PNG on one time axis with the
-// picture (a frame strip), the spectrogram, the waveform, momentary and short-term loudness against
-// the integrated level and the -14 LUFS target, onset ticks, salient hits, visual events, and every
-// hole and the dead tail shaded. The hole, the dead tail and a late hit are visible before anyone
-// listens. Same analysis as soundcheck.mjs (its verdict and first fixes head the sheet).
+// SOUNDSHEET. Draws a film's soundtrack as a single PNG, everything stacked on one shared timeline: a
+// strip of frames, the spectrogram, the waveform, momentary and short-term loudness with lines for the
+// integrated level and the -14 LUFS target, onset ticks, accents, picture events, and shading over
+// every hole and over dead air at the end. A gap, a silent ending or a late accent jumps out at a
+// glance. It runs the soundcheck.mjs analysis, and that verdict and its top fixes sit at the top.
 //   node tools/soundsheet.mjs <film|file.mp4|file.wav> -o out/<name>-sound.png [--profile p.json] [--allow a:b] [--width 1600]
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, mkdirSync, existsSync } from "node:fs";
@@ -40,11 +40,11 @@ try {
   const fails = r.rows.filter((x) => x.status === "FAIL").length, warns = r.rows.filter((x) => x.status === "WARN").length;
   const data = {
     title: basename(file), dur, I: m.lufs, verdict: fails ? `FAIL: ${fails} fail, ${warns} warn` : warns ? `PASS with ${warns} warning${warns > 1 ? "s" : ""}` : "PASS",
-    stats: `${m.lufs.toFixed(1)} LUFS  ·  LRA ${m.lra.toFixed(1)} LU  ·  ${m.truePeak.toFixed(1)} dBTP  ·  150-2k corr ${Number.isFinite(m.bodyCorr) ? m.bodyCorr.toFixed(2) : "n/a"}  ·  sub ${m.bands.sub.toFixed(1)} dB`,
+    stats: `${m.lufs.toFixed(1)} LUFS  ·  LRA ${m.lra.toFixed(1)} LU  ·  ${m.truePeak.toFixed(1)} dBTP  ·  150-2k corr ${Number.isFinite(m.bodyCorr) ? m.bodyCorr.toFixed(2) : "n/a"}  ·  rumble ${m.bands.rumble.toFixed(1)} dB`,
     fixes: r.fixes.slice(0, 4).map((x) => `${x.status}  ${x.fix}`),
     strip, spec: png64(join(tmp, "spec.png")), env: env_,
     momentary: r.curves.momentary.map((v, i) => [i * r.curves.hopS + 0.2, v]), shortTerm: r.curves.shortTerm.map((v, i) => [i * r.curves.hopS + 1.5, v]),
-    onsets: r.curves.onsets, hits: r.curves.hits, events: r.sync?.times ?? [], unanswered: r.sync?.unanswered ?? [],
+    onsets: r.curves.onsets, accents: r.curves.accents, events: r.sync?.times ?? [], unanswered: r.sync?.unanswered ?? [],
     shade: [...m.gaps.filter((g) => g.len >= 0.1).map((g) => ({ a: g.at, b: g.at + g.len, label: g.allowed ? "allowed hole" : `hole ${g.len.toFixed(1)} s` })), ...(m.endSilence >= 0.1 ? [{ a: m.endSilenceFrom, b: dur, label: `dead tail ${m.endSilence.toFixed(1)} s` }] : []), ...(m.firstSound && m.firstSound >= 0.1 ? [{ a: 0, b: m.firstSound, label: "before body level" }] : [])],
     LEFT, PW, WIDTH,
   };
@@ -61,11 +61,11 @@ try {
   const css = (k) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
   const load = (src) => new Promise((ok) => { if (!src) return ok(null); const i = new Image(); i.onload = () => ok(i); i.src = src; });
   Promise.all([load(D.strip && D.strip.src), load(D.spec), document.fonts.ready]).then(([strip, spec]) => {
-    const rows = [["picture", strip ? D.strip.h : 0], ["spectrogram", 240], ["waveform", 130], ["loudness", 210], ["onsets / hits / picture", 64]].filter((r) => r[1]);
+    const rows = [["picture", strip ? D.strip.h : 0], ["spectrogram", 240], ["waveform", 130], ["loudness", 210], ["onsets / accents / picture", 64]].filter((r) => r[1]);
     const GAP = 14, H = rows.reduce((a, r) => a + r[1] + GAP, 0) + 40, cv = document.getElementById("c"); cv.width = D.WIDTH; cv.height = H;
     const g = cv.getContext("2d"), X = (t) => D.LEFT + (t / D.dur) * D.PW; let y = 4; const top = {};
     g.font = "500 12px Poppins, Arial, sans-serif"; g.textBaseline = "middle";
-    for (const [name, h] of rows) { top[name] = [y, h]; g.fillStyle = css("--ink"); g.textAlign = "right"; g.fillText(name === "onsets / hits / picture" ? "onsets" : name, D.LEFT - 10, name === "onsets / hits / picture" ? y + h / 6 : y + h / 2); if (name === "spectrogram") { g.font = "10px Poppins, Arial, sans-serif"; g.fillText("log Hz", D.LEFT - 10, y + h / 2 + 16); g.font = "500 12px Poppins, Arial, sans-serif"; } g.strokeStyle = css("--line"); g.strokeRect(D.LEFT + 0.5, y + 0.5, D.PW - 1, h - 1); y += h + GAP; }
+    for (const [name, h] of rows) { top[name] = [y, h]; g.fillStyle = css("--ink"); g.textAlign = "right"; g.fillText(name === "onsets / accents / picture" ? "onsets" : name, D.LEFT - 10, name === "onsets / accents / picture" ? y + h / 6 : y + h / 2); if (name === "spectrogram") { g.font = "10px Poppins, Arial, sans-serif"; g.fillText("log Hz", D.LEFT - 10, y + h / 2 + 16); g.font = "500 12px Poppins, Arial, sans-serif"; } g.strokeStyle = css("--line"); g.strokeRect(D.LEFT + 0.5, y + 0.5, D.PW - 1, h - 1); y += h + GAP; }
     const bottom = y - GAP;
     // shading first, through every panel: holes, the dead tail, the silent start
     for (const s of D.shade) { g.fillStyle = "rgba(192,57,43,0.13)"; g.fillRect(X(s.a), 4, Math.max(2, X(s.b) - X(s.a)), bottom - 4); g.fillStyle = css("--fail"); g.textAlign = "left"; g.fillText(s.label, Math.min(X(s.a) + 4, D.LEFT + D.PW - g.measureText(s.label).width), bottom + 12); }
@@ -81,12 +81,12 @@ try {
       const curve = (pts, col, w) => { g.strokeStyle = col; g.lineWidth = w; g.beginPath(); let pen = false; for (const [tt, l] of pts) { if (!(l > -70)) { pen = false; continue; } pen ? g.lineTo(X(tt), Y(l)) : g.moveTo(X(tt), Y(l)); pen = true; } g.stroke(); g.lineWidth = 1; };
       curve(D.momentary, "rgba(44,110,155,0.55)", 1); curve(D.shortTerm, css("--ink"), 2);
       g.fillStyle = css("--ink"); g.textAlign = "left"; g.fillText("momentary (thin), short-term (thick), LUFS", D.LEFT + 6, t + 12); }
-    { const [t, h] = top["onsets / hits / picture"], third = h / 3;
+    { const [t, h] = top["onsets / accents / picture"], third = h / 3;
       g.strokeStyle = css("--ink"); for (const o of D.onsets) { g.beginPath(); g.moveTo(X(o) + 0.5, t + 2); g.lineTo(X(o) + 0.5, t + third); g.stroke(); }
-      g.fillStyle = css("--accent"); for (const o of D.hits) { g.beginPath(); g.arc(X(o), t + third * 1.5, 4, 0, 7); g.fill(); }
+      g.fillStyle = css("--accent"); for (const o of D.accents) { g.beginPath(); g.arc(X(o), t + third * 1.5, 4, 0, 7); g.fill(); }
       for (const e of D.events) { const miss = D.unanswered.includes(e); g.strokeStyle = miss ? css("--fail") : "#1e7d4f"; g.lineWidth = 2; g.beginPath(); g.moveTo(X(e), t + third * 2 + 2); g.lineTo(X(e), t + h - 2); g.stroke(); g.lineWidth = 1;
         g.strokeStyle = miss ? "rgba(192,57,43,0.35)" : "rgba(30,125,79,0.3)"; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(X(e), 4); g.lineTo(X(e), t); g.stroke(); g.setLineDash([]); }
-      g.font = "10px Poppins, Arial, sans-serif"; g.fillStyle = css("--ink"); g.textAlign = "right"; g.fillText("hits", D.LEFT - 10, t + third * 1.5); g.fillText("picture events", D.LEFT - 10, t + third * 2.5); }
+      g.font = "10px Poppins, Arial, sans-serif"; g.fillStyle = css("--ink"); g.textAlign = "right"; g.fillText("accents", D.LEFT - 10, t + third * 1.5); g.fillText("picture events", D.LEFT - 10, t + third * 2.5); }
     // the time axis
     g.font = "11px Poppins, Arial, sans-serif"; g.fillStyle = css("--ink"); g.textAlign = "center"; const step = D.dur > 40 ? 5 : D.dur > 12 ? 2 : 1;
     for (let s = 0; s <= D.dur + 1e-6; s += step) g.fillText(Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"), X(s), bottom + 28);

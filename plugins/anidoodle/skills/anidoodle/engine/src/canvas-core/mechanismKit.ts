@@ -144,24 +144,26 @@ export const setHand = (h: Hand) => { HAND = h; };
 let PALETTE: ((m: Material) => Material) | null = null;
 export const setPalette = (f: ((m: Material) => Material) | null) => { PALETTE = f; };
 const pal = (m: Material) => (PALETTE ? PALETTE(m) : m);
-// a ghost is a part drawn faintly where it just was (a spinning blade's trail): no knock, so what is behind shows
-let GHOST = 1;
-export const ghost = (alpha: number, draw: () => void) => { const g = GHOST; GHOST = g * alpha; try { draw(); } finally { GHOST = g; } };
+// faint: paint a part at reduced strength where it was a moment ago, with no knock, so whatever is behind
+// it stays visible through it
+let FAINT = 1;
+export const faint = (alpha: number, draw: () => void) => { const g = FAINT; FAINT = g * alpha; try { draw(); } finally { FAINT = g; } };
 /**
- * Something that turns fast enough to blur. `draw(angle)` paints the blades at an angle; behind them go
- * `trails` fainter copies, spread over `sweep` radians against the direction of travel, and under all of
- * it the caller's swept `disc`, if any, as a faint sheen. Slow turns (sweep near 0) draw the blades alone.
+ * A part turning too fast to see clearly. `draw(angle)` paints the blades at one angle. Before them come
+ * `echoes` fainter copies of the blades, each a little further back along the turn, spaced over `sweep`
+ * radians, and below those the caller's `swept` shape, if given, painted very faint. When `sweep` is near
+ * 0 the turn is slow and only the blades are drawn.
  */
-export const spin = (angle: number, sweep: number, draw: (angle: number) => void, o: { trails?: number; disc?: () => void } = {}) => {
-  const n = o.trails ?? 4, blur = Math.min(1, Math.abs(sweep) / 1.2);
-  if (blur > 0.02) { if (o.disc) ghost(0.16 * blur, o.disc); for (let k = n; k >= 1; k--) ghost(0.42 * blur * (1 - k / (n + 1)) ** 1.4, () => draw(angle - (sweep * k) / n)); }
+export const spin = (angle: number, sweep: number, draw: (angle: number) => void, o: { echoes?: number; swept?: () => void } = {}) => {
+  const n = o.echoes ?? 4, blur = Math.min(1, Math.abs(sweep) / 1.2);
+  if (blur > 0.02) { if (o.swept) faint(0.16 * blur, o.swept); for (let k = n; k >= 1; k--) faint(0.42 * blur * (1 - k / (n + 1)) ** 1.4, () => draw(angle - (sweep * k) / n)); }
   draw(angle);
 };
 export const hand = () => HAND;
 /** a toned region in the current hand, honouring the making order (inked, then toned left to right) */
 export const tone = (ctx: Ctx, pts: P2[], m: Material, q: number, alpha = 1) => {
   if (pts.length < 3) return; m = pal(m);
-  if (GHOST < 1) { ctx.save(); ctx.globalAlpha = alpha * GHOST; HAND.region(ctx, pts, q, m, alpha * GHOST); ctx.restore(); return; }
+  if (FAINT < 1) { ctx.save(); ctx.globalAlpha = alpha * FAINT; HAND.region(ctx, pts, q, m, alpha * FAINT); ctx.restore(); return; }
   if (REVEAL.tone >= 1) { if (!(HAND.opaque && alpha >= 1)) HAND.knock(ctx, pts); HAND.region(ctx, pts, q, m, alpha); return; }
   if (REVEAL.ink < 1) return;
   HAND.knock(ctx, pts); if (REVEAL.tone <= 0) return;
@@ -169,9 +171,9 @@ export const tone = (ctx: Ctx, pts: P2[], m: Material, q: number, alpha = 1) => 
   ctx.save(); ctx.beginPath(); ctx.rect(x0 - 1, -1e5, (x1 - x0 + 2) * REVEAL.tone, 2e5); ctx.clip(); HAND.region(ctx, pts, q, m, alpha); ctx.restore();
 };
 /** paint the ground back over a shape without toning it (the paper inside a hull) */
-export const knock = (ctx: Ctx, pts: P2[]) => { if (GHOST >= 1 && pts.length >= 3 && (REVEAL.tone >= 1 || REVEAL.ink >= 1)) HAND.knock(ctx, pts); };
-export const ink = (ctx: Ctx, pts: P2[], role: Role, m: Material, close = false, alpha = 1) => { if (pts.length >= 2 && REVEAL.ink > 0) HAND.line(ctx, pts, role, pal(m), close, alpha * GHOST, REVEAL.ink); };
-export const inkDot = (ctx: Ctx, at: P2, r: number, m: Material, alpha = 1) => { if (REVEAL.ink >= 1) HAND.dot(ctx, at, r, pal(m), alpha * GHOST); };
+export const knock = (ctx: Ctx, pts: P2[]) => { if (FAINT >= 1 && pts.length >= 3 && (REVEAL.tone >= 1 || REVEAL.ink >= 1)) HAND.knock(ctx, pts); };
+export const ink = (ctx: Ctx, pts: P2[], role: Role, m: Material, close = false, alpha = 1) => { if (pts.length >= 2 && REVEAL.ink > 0) HAND.line(ctx, pts, role, pal(m), close, alpha * FAINT, REVEAL.ink); };
+export const inkDot = (ctx: Ctx, at: P2, r: number, m: Material, alpha = 1) => { if (REVEAL.ink >= 1) HAND.dot(ctx, at, r, pal(m), alpha * FAINT); };
 const ruleFrame = (ctx: Ctx, W: number, H: number, colour: string, p: number, pad = 34) => {
   if (p <= 0) return; ctx.strokeStyle = colour; ctx.lineWidth = 1.2; ctx.globalAlpha = 1; ctx.lineCap = "butt"; ctx.setLineDash([]);
   const L = 2 * (W + H - 4 * pad) * clamp01(p), segs: [P2, P2][] = [[[pad, pad], [W - pad, pad]], [[W - pad, pad], [W - pad, H - pad]], [[W - pad, H - pad], [pad, H - pad]], [[pad, H - pad], [pad, pad]]];

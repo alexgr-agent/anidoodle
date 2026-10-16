@@ -1,15 +1,18 @@
-// SOUNDCHECK. The film-sound scorecard as pure functions over a decoded stereo mix, so the tool
-// (tools/soundcheck.mjs) and the tests read the same numbers. Nothing here needs a model or ears:
+// SOUNDCHECK. Pure functions that score a film's decoded stereo mix, shared by tools/soundcheck.mjs and
+// the tests so both always see the same numbers. Everything is measured from the samples; no model and
+// no listening is involved. What gets measured:
 //   level     BS.1770 integrated / LRA / true peak from meter.ts; 10 ms K-weighted powers for the rest
-//   shape     first sound, holes, dead tail, fade, final moment, an 11-point arc, hits, stop-downs
-//   spectrum  six band shares of the mid, centroid, the loudest third-octave in a band (to name a fix)
+//   shape     first sound, holes, dead tail, fade, final moment, an 11-point arc, accents, held breaths
+//   spectrum  five band shares of the mid, centroid, the loudest third-octave in a band (to name a fix)
 //   stereo    side vs mid, L/R correlation overall and per band, mono-fold loss beyond the expected 3 dB
 //   picture   frame-difference events against onsets, with a chance baseline from shifted events
-// Then evaluate() holds every number to a profile and writes the fix a mixer would make.
+// evaluate() then checks each number against a profile's range and, where one is out, writes the
+// concrete change to the mix that would bring it back.
 import { loudness, truePeak, onsetsDetail, centroid, fft } from "./meter";
 import { kWeight } from "./sfxCore";
 
-export const BANDS: Record<string, [number, number]> = { sub: [20, 60], low: [60, 250], lowmid: [250, 1000], mid: [1000, 4000], presence: [4000, 8000], air: [8000, 16000] };
+// five listening regions: what you feel, what warms, where notes live, what cuts through, what shines
+export const BANDS: Record<string, [number, number]> = { rumble: [20, 80], warmth: [80, 300], body: [300, 1200], bite: [1200, 5000], sparkle: [5000, 16000] };
 /** Where a stereo mix's body sits: decorrelation here is what a phone's one speaker combs away. */
 export const BODY: [number, number] = [150, 2000];
 const HOP = 0.01, BLK = 0.05;
@@ -52,14 +55,14 @@ export type Measures = {
   introLu: number; endLu: number; arc: (number | null)[]; arcDip: number; arcDipAt: number;
   firstSound: number | null; insideGap: number; insideGapAt: number | null; gaps: Gap[]; endSilence: number; endSilenceFrom: number;
   fade: number; finalLu: number; tailLu: number; quietAt: number | null; loudAt: number;
-  onsetRate: number; hitRate: number; stopDowns: { at: number; len: number }[];
+  onsetRate: number; accentRate: number; heldBreaths: { at: number; len: number }[];
   bands: Record<string, number>; centroid: number; peakHz: Record<string, number>;
   sideMid: number; corr: number; bandCorr: Record<string, number>; bodyCorr: number; monoDrop: number; monoLoss: number;
   silent: boolean;
 };
-export type Curves = { momentary: number[]; shortTerm: number[]; hopS: number; levels50: number[]; onsets: number[]; hits: number[] };
+export type Curves = { momentary: number[]; shortTerm: number[]; hopS: number; levels50: number[]; onsets: number[]; accents: number[] };
 
-/** Every model-free number for one decoded stereo mix. `allow` lists [from, to] seconds where a hole is meant (a declared stop-down). */
+/** Every model-free number for one decoded stereo mix. `allow` lists [from, to] seconds where a hole is meant (a declared held breath). */
 export const analyze = (L: Float32Array, R: Float32Array, sr: number, { allow = [] as [number, number][] } = {}): { measures: Measures; curves: Curves } => {
   const dur = L.length / sr, chans = [L, R];
   const lo = loudness(chans, sr), tp = truePeak(chans), I = lo.integrated, silent = !(I > -70);
@@ -94,16 +97,16 @@ export const analyze = (L: Float32Array, R: Float32Array, sr: number, { allow = 
   const fin = lo.momentary.filter((_, i) => i * lo.hopS + 0.2 >= dur - 3);
   const st = lo.shortTerm; let si = 0; st.forEach((v, i) => { if (v > st[si]) si = i; });
   let qi = -1; st.forEach((v, i) => { if (v > I - 40 && (qi < 0 || v < st[qi])) qi = i; });
-  // hits and stop-downs on a 100 ms level every 10 ms
+  // accents (sudden jumps) and held breaths (short dips that come back) on a 100 ms level every 10 ms
   const S = Array.from({ length: nh }, (_, i) => lufsOf(meanOf(p10, i - 5, i + 5)));
-  const hits: number[] = [];
-  for (let i = 8; i < nh; i++) if (S[i] - S[i - 8] >= 6 && S[i] >= I - 8 && (!hits.length || i * HOP - hits[hits.length - 1] > 0.3)) hits.push(i * HOP);
-  const stopDowns: { at: number; len: number }[] = [];
+  const accents: number[] = [];
+  for (let i = 8; i < nh; i++) if (S[i] - S[i - 8] >= 6 && S[i] >= I - 8 && (!accents.length || i * HOP - accents[accents.length - 1] > 0.3)) accents.push(i * HOP);
+  const heldBreaths: { at: number; len: number }[] = [];
   for (let i = 50; i < nh; i++) {
     const ref = lufsOf(meanOf(p10, i - 50, i)); if (ref < I - 10 || S[i] >= ref - 10 || S[i - 1] < ref - 10) continue;
     let j = i; while (j < nh && S[j] < ref - 10) j++;
     const len = (j - i) * HOP; let back = false; for (let k = j; k < Math.min(nh, j + 30); k++) if (S[k] >= ref - 6) { back = true; break; }
-    if (len >= 0.15 && len <= 1.5 && back) stopDowns.push({ at: i * HOP, len: +len.toFixed(2) });
+    if (len >= 0.15 && len <= 1.5 && back) heldBreaths.push({ at: i * HOP, len: +len.toFixed(2) });
     i = j;
   }
   const on = silent ? [] : onsetsDetail(chans, sr).times;
@@ -128,12 +131,12 @@ export const analyze = (L: Float32Array, R: Float32Array, sr: number, { allow = 
     firstSound: first >= 0 ? first * BLK : null, insideGap: open[0]?.len ?? 0, insideGapAt: open[0]?.at ?? null, gaps, endSilence: Math.max(0, dur - endFrom), endSilenceFrom: endFrom,
     fade: lastBody >= 0 && last >= lastBody ? (last - lastBody) * BLK : 0, finalLu: fin.length ? Math.max(...fin) - I : NaN, tailLu: lv.length ? Math.max(lv[lv.length - 1] - Iraw, -70 - I) : NaN,
     quietAt: qi >= 0 ? qi * lo.hopS + 1.5 : null, loudAt: si * lo.hopS + 1.5,
-    onsetRate: on.length / dur, hitRate: hits.length / dur, stopDowns,
+    onsetRate: on.length / dur, accentRate: accents.length / dur, heldBreaths,
     bands, centroid: silent ? 0 : centroid(chans, sr).energyWeighted, peakHz,
     sideMid: 10 * Math.log10(Math.max(sm, 1e-30) / Math.max(mm, 1e-30)), corr: sl > 0 && sr_ > 0 ? slr / Math.sqrt(sl * sr_) : NaN,
     bandCorr, bodyCorr: corrIn(BODY[0], BODY[1]), monoDrop, monoLoss: monoDrop - 10 * Math.log10(2), silent,
   };
-  return { measures, curves: { momentary: lo.momentary, shortTerm: lo.shortTerm, hopS: lo.hopS, levels50: lv, onsets: on, hits } };
+  return { measures, curves: { momentary: lo.momentary, shortTerm: lo.shortTerm, hopS: lo.hopS, levels50: lv, onsets: on, accents } };
 };
 
 // ---------------------------------------------------------------- picture against sound
@@ -161,19 +164,19 @@ export const visualSync = (events: number[], onsets: number[], dur: number, tol 
 export type Range = { min?: number; max?: number; tol?: number };
 export type Status = "PASS" | "WARN" | "FAIL" | "INFO";
 export type Profile = { name: string; ranges: Record<string, Range>; allow?: [number, number][] };
-/** Drawing films, from the study's pro-reference column, tightened where a drawing film should be (no dead tail, no hole, sound from frame 0). */
+/** Built-in ranges for drawing films: web loudness, sound from frame 0, no hole, no dead tail, phone-safe mids. */
 export const DEFAULT_PROFILE: Profile = {
   name: "built-in: drawing film",
   ranges: {
     lufs: { min: -16, max: -13, tol: 1 }, truePeak: { max: -1, tol: 0 }, lra: { max: 9, tol: 3 },
     firstSound: { max: 0.5, tol: 0.5 }, insideGap: { max: 0.25, tol: 0.25 }, endSilence: { max: 0.5, tol: 0.5 }, arcDip: { min: -10, tol: 6 }, tailLu: { max: -20, tol: 10 },
     bodyCorr: { min: 0.3, tol: 0.15 }, monoLoss: { max: 1.5, tol: 0.5 }, corr: { min: 0.3, tol: 0.3 }, sideMid: { min: -15, max: -4, tol: 3 },
-    sub: { max: -6, tol: 2 }, lowmid: { max: -3, tol: 1.5 },
+    rumble: { max: -5, tol: 2 }, body: { max: -3, tol: 1.5 },
   },
 };
 /** Delivery limits a reference set never loosens: a profile built from films can only move the taste ranges. */
 export const HARD = ["truePeak", "firstSound", "insideGap", "endSilence", "monoLoss"];
-const TOL: Record<string, number> = { lufs: 1, lra: 3, crest: 2, introLu: 3, endLu: 3, arcDip: 4, tailLu: 6, fade: 0.5, finalLu: 4, onsetRate: 1, hitRate: 0.3, corr: 0.2, bodyCorr: 0.15, sideMid: 3, centroid: 400, sub: 2, low: 2, lowmid: 2, mid: 2, presence: 2, air: 2 };
+const TOL: Record<string, number> = { lufs: 1, lra: 3, crest: 2, introLu: 3, endLu: 3, arcDip: 4, tailLu: 6, fade: 0.5, finalLu: 4, onsetRate: 1, accentRate: 0.3, corr: 0.2, bodyCorr: 0.15, sideMid: 3, centroid: 400, rumble: 2, warmth: 2, body: 2, bite: 2, sparkle: 2 };
 
 export type Row = { key: string; label: string; value: number | null; text: string; status: Status; range?: Range; fix?: string; at?: number; covered?: boolean };
 const fmtT = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
@@ -188,26 +191,25 @@ export const grade = (v: number | null, r?: Range): Status => {
 const rangeText = (r?: Range) => (!r ? "" : r.min !== undefined && r.max !== undefined ? `${r.min}..${r.max}` : r.min !== undefined ? `>= ${r.min}` : r.max !== undefined ? `<= ${r.max}` : "");
 
 type Def = { key: string; label: string; get: (m: Measures) => number | null; show: (v: number, m: Measures) => string; fix?: (v: number, m: Measures, r: Range) => string; at?: (m: Measures) => number | undefined };
-const BAND_LABEL: Record<string, string> = { sub: "sub 20-60 Hz", low: "low 60-250 Hz", lowmid: "low-mid 250-1k", mid: "mid 1-4k", presence: "presence 4-8k", air: "air 8-16k" };
+const BAND_LABEL: Record<string, string> = { rumble: "rumble 20-80 Hz", warmth: "warmth 80-300 Hz", body: "body 300-1200 Hz", bite: "bite 1.2-5 kHz", sparkle: "sparkle 5-16 kHz" };
 const bandFix = (b: string, v: number, m: Measures, r: Range) => {
-  const hot = r.max !== undefined && v > r.max, pk = m.peakHz[b];
-  if (b === "sub") return hot ? `too much 20-60 Hz (${f1(v)} dB of the energy, it eats the headroom): high-pass the effects at 30-40 Hz and pull the sub voice down` : `no weight under 60 Hz (${f1(v)} dB): let a low voice or the impact reach 40-60 Hz`;
-  if (b === "lowmid") return hot ? `boxy (${f1(v)} dB in 250-1k, loudest around ${pk} Hz): cut ${pk >= 250 && pk <= 800 ? `${Math.round(pk * 0.08) * 10}-${Math.round(pk * 0.125) * 10}` : "300-500"} Hz by 2-3 dB` : `thin (${f1(v)} dB in 250-1k): the body is missing, lift 250-500 Hz 1-2 dB`;
-  if (b === "low") return hot ? `boomy (${f1(v)} dB in 60-250, around ${pk} Hz): cut ${pk} Hz 2-3 dB or high-pass the pads at 80-100 Hz` : `no low end (${f1(v)} dB in 60-250): bring the bass or the low pad up`;
-  if (b === "mid") return hot ? `honky (${f1(v)} dB in 1-4k, around ${pk} Hz): cut ${pk} Hz 2 dB` : `recessed mids (${f1(v)} dB in 1-4k): the melody needs 1-3 kHz, lift the lead`;
-  if (b === "presence") return hot ? `harsh (${f1(v)} dB in 4-8k): cut 4-6 kHz 2 dB or soften the transients` : `dull (${f1(v)} dB in 4-8k): lift 5 kHz 1-2 dB on the lead or the effects' transients`;
-  return hot ? `fizzy (${f1(v)} dB in 8-16k): a shelf down 2 dB above 10 kHz` : `no air (${f1(v)} dB in 8-16k): a gentle shelf up above 10 kHz`;
+  const hot = r.max !== undefined && v > r.max, pk = m.peakHz[b], at = pk ? ` (strongest near ${pk} Hz)` : "";
+  if (b === "rumble") return hot ? `the rumble takes ${f1(v)} dB of the energy: little speakers cannot play it and it uses up the loudness; roll off under 40 Hz on the effects and shorten the low tails` : `nothing under 80 Hz (${f1(v)} dB): one low voice or the big hit can carry some weight`;
+  if (b === "warmth") return hot ? `woolly, ${f1(v)} dB in the warmth${at}: dip that spot a few dB or clear the pads out from under 100 Hz` : `cold (${f1(v)} dB of warmth): the bass or a low pad can come up`;
+  if (b === "body") return hot ? `crowded body, ${f1(v)} dB${at}: notch the strongest spot a couple of dB, or move a part up or down an octave` : `hollow body (${f1(v)} dB): the chords or the melody's lower notes can come forward`;
+  if (b === "bite") return hot ? `pushy, ${f1(v)} dB of bite${at}: a small dip there, or a softer attack on the loudest part` : `muffled (${f1(v)} dB of bite): the melody wants to sit in 1.5-3 kHz; bring the lead forward`;
+  return hot ? `glassy, ${f1(v)} dB of sparkle: tame the very top with a gentle shelf, or round off the sharpest transients` : `no shine (${f1(v)} dB of sparkle): a touch of top on the effects or the room`;
 };
 const DEFS: Def[] = [
   { key: "lufs", label: "integrated loudness", get: (m) => m.lufs, show: (v) => `${f1(v)} LUFS`, fix: (v, m, r) => v < (r.min ?? -99) ? `plays at ${f1(v)} LUFS, ${f1(-14 - v)} LU under the web target: master the mix to -14 LUFS (or -16 for a gentle film), a static gain then the limiter` : `too loud at ${f1(v)} LUFS: turn the master down to -14 LUFS` },
   { key: "truePeak", label: "true peak", get: (m) => m.truePeak, show: (v) => `${f1(v)} dBTP`, fix: (v) => `true peak ${f1(v)} dBTP: set the limiter ceiling to -1.5 dBTP before the encode, so the AAC overshoot stays under -1` },
   { key: "lra", label: "loudness range", get: (m) => m.lra, show: (v) => `${f1(v)} LU`, fix: (v, m) => `level swings ${f1(v)} LU (loudest at ${fmtT(m.loudAt)}${m.quietAt !== null ? `, quietest at ${fmtT(m.quietAt)}` : ""}): lift the quiet passages or keep a bed under them`, at: (m) => m.quietAt ?? undefined },
   { key: "firstSound", label: "first sound", get: (m) => m.firstSound, show: (v) => `${f1(v, 2)} s`, fix: (v) => `nothing reaches body level until ${fmtT(v)}: start the bed or a sound on frame 0`, at: (m) => m.firstSound ?? 0 },
-  { key: "insideGap", label: "longest hole inside", get: (m) => m.insideGap, show: (v, m) => `${f1(v, 2)} s${m.insideGapAt !== null ? ` at ${fmtT(m.insideGapAt)}` : ""}`, fix: (v, m) => `${f1(v)} s hole at ${fmtT(m.insideGapAt ?? 0)}: keep the bed under it, or if it is a deliberate stop-down pass --allow ${f1(m.insideGapAt ?? 0, 2)}:${f1((m.insideGapAt ?? 0) + v, 2)}`, at: (m) => m.insideGapAt ?? undefined },
+  { key: "insideGap", label: "longest hole inside", get: (m) => m.insideGap, show: (v, m) => `${f1(v, 2)} s${m.insideGapAt !== null ? ` at ${fmtT(m.insideGapAt)}` : ""}`, fix: (v, m) => `${f1(v)} s hole at ${fmtT(m.insideGapAt ?? 0)}: keep the bed under it, or if the silence is meant as a held breath pass --allow ${f1(m.insideGapAt ?? 0, 2)}:${f1((m.insideGapAt ?? 0) + v, 2)}`, at: (m) => m.insideGapAt ?? undefined },
   { key: "endSilence", label: "dead air at the end", get: (m) => m.endSilence, show: (v) => `${f1(v, 2)} s`, fix: (v, m) => `${f1(v)} s of dead air at the end (from ${fmtT(m.endSilenceFrom)}): carry the bed or a tail to the last frame, or end the film sooner`, at: (m) => m.endSilenceFrom },
   { key: "arcDip", label: "deepest dip in the arc", get: (m) => (m.silent ? null : m.arcDip), show: (v, m) => `${sign(v)} LU at ${fmtT(m.arcDipAt)}`, fix: (v, m) => `the sound drops ${f1(-v)} LU under the film at ${fmtT(m.arcDipAt)} (${Math.round((100 * m.arcDipAt) / m.durationS)} %): keep the bed or room tone under it`, at: (m) => m.arcDipAt },
   { key: "tailLu", label: "level of the last 50 ms", get: (m) => (m.silent ? null : m.tailLu), show: (v, m) => (v + m.lufs <= -70 + 1e-6 ? "silent" : `${sign(v)} LU`), fix: (v) => `ends on a cut (the last 50 ms still at ${sign(v)} LU): end on a tail or fade the last 0.3 s`, at: (m) => m.durationS - 0.05 },
-  { key: "bodyCorr", label: "L/R correlation 150-2k", get: (m) => m.bodyCorr, show: (v) => f1(v, 2), fix: (v) => `mids decorrelated (150-2k correlation ${f1(v, 2)}): narrow the stereo width below 2 kHz (mixDsp.bandWidth mid at 1.0, or a mono room send)` },
+  { key: "bodyCorr", label: "L/R correlation 150-2k", get: (m) => m.bodyCorr, show: (v) => f1(v, 2), fix: (v) => `mids decorrelated (150-2k correlation ${f1(v, 2)}): narrow the stereo width below 2 kHz (mixDsp.bandWidth with mid around 0.5, or a mono room send)` },
   { key: "monoLoss", label: "mono fold, extra loss", get: (m) => m.monoLoss, show: (v) => `${f1(v)} dB`, fix: (v) => `folded to mono it loses ${f1(v)} dB more than a centred mix: phones will comb it; narrow the width or check the stereo pair's phase` },
   { key: "corr", label: "L/R correlation", get: (m) => m.corr, show: (v) => f1(v, 2), fix: (v) => `L and R barely agree (correlation ${f1(v, 2)}): pan the lead and bass to the centre, keep width for pads and room` },
   { key: "sideMid", label: "side vs mid", get: (m) => m.sideMid, show: (v) => `${f1(v)} dB`, fix: (v, m, r) => v > (r.max ?? 99) ? `too wide (side ${f1(v)} dB against the mid): narrow the overall width` : `very narrow (side ${f1(v)} dB): widen the pads or the room a little` },
@@ -220,11 +222,11 @@ const DEFS: Def[] = [
   { key: "fade", label: "fade / ring-out", get: (m) => m.fade, show: (v) => `${f1(v, 2)} s` },
   { key: "finalLu", label: "final moment (last 3 s)", get: (m) => m.finalLu, show: (v) => `${sign(v)} LU` },
   { key: "onsetRate", label: "onsets per second", get: (m) => m.onsetRate, show: (v) => f1(v, 2) },
-  { key: "hitRate", label: "salient hits per second", get: (m) => m.hitRate, show: (v) => f1(v, 2) },
-  { key: "stopDowns", label: "stop-downs", get: (m) => m.stopDowns.length, show: (v, m) => `${v}${m.stopDowns.length ? ` (${m.stopDowns.slice(0, 4).map((s) => fmtT(s.at)).join(", ")})` : ""}` },
+  { key: "accentRate", label: "accents per second", get: (m) => m.accentRate, show: (v) => f1(v, 2) },
+  { key: "heldBreaths", label: "held breaths", get: (m) => m.heldBreaths.length, show: (v, m) => `${v}${m.heldBreaths.length ? ` (${m.heldBreaths.slice(0, 4).map((s) => fmtT(s.at)).join(", ")})` : ""}` },
 ];
 /** Fix order: what most makes a film read unfinished goes first. */
-const ORDER = ["lufs", "endSilence", "insideGap", "firstSound", "arcDip", "truePeak", "lra", "bodyCorr", "monoLoss", "sub", "lowmid", "sideMid", "corr", "tailLu"];
+const ORDER = ["lufs", "endSilence", "insideGap", "firstSound", "arcDip", "truePeak", "lra", "bodyCorr", "monoLoss", "rumble", "body", "sideMid", "corr", "tailLu"];
 
 export const evaluate = (m: Measures, profile: Profile = DEFAULT_PROFILE): Row[] =>
   DEFS.map((d) => {
@@ -237,7 +239,7 @@ export const evaluate = (m: Measures, profile: Profile = DEFAULT_PROFILE): Row[]
   });
 /** One fix per cause: the stereo numbers all point at the width, so they fold into the first of them that is out. */
 const GROUP: Record<string, string> = { bodyCorr: "stereo", monoLoss: "stereo", corr: "stereo", sideMid: "stereo" };
-export const fixFirst = (rows: Row[]) => {
+export const startHere = (rows: Row[]) => {
   const out: Row[] = [], seen = new Map<string, Row>();
   for (const r of rows.filter((x) => x.fix && !x.covered).sort((a, b) => (a.status === b.status ? 0 : a.status === "FAIL" ? -1 : 1) || rank(a.key) - rank(b.key))) {
     const g = GROUP[r.key], lead = g && seen.get(g);
@@ -250,7 +252,7 @@ export const fixFirst = (rows: Row[]) => {
 const rank = (k: string) => { const i = ORDER.indexOf(k); return i < 0 ? 99 : i; };
 export { rangeText };
 
-/** Ranges from films Alex picked: min, max and median of every number, per metric. */
+/** Ranges from films the user picked: min, max and median of every number, per metric. */
 export const buildProfile = (name: string, sets: { file: string; measures: Measures }[]) => {
   const metrics: Record<string, { min: number; max: number; median: number }> = {};
   for (const d of DEFS) {
@@ -263,7 +265,7 @@ export const buildProfile = (name: string, sets: { file: string; measures: Measu
 export const profileFrom = (built: { name: string; metrics: Record<string, { min: number; max: number }>; allow?: [number, number][] }): Profile => {
   const ranges: Record<string, Range> = { ...DEFAULT_PROFILE.ranges };
   for (const [k, v] of Object.entries(built.metrics ?? {})) {
-    if (HARD.includes(k) || k === "stopDowns" || k === "peakPos") continue;
+    if (HARD.includes(k) || k === "heldBreaths" || k === "peakPos") continue;
     const tol = TOL[k] ?? DEFAULT_PROFILE.ranges[k]?.tol ?? 1, pad = tol / 2;
     ranges[k] = { min: +(v.min - pad).toFixed(2), max: +(v.max + pad).toFixed(2), tol };
   }

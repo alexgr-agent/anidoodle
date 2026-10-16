@@ -8,12 +8,11 @@ import { rng } from "../core";
 import { pianoVelocity } from "./keysPiano";
 import { bandWidth } from "./mixDsp";
 
-// Recordings made with spaced microphones can be out of phase between the sides in the body of the
-// sound (150 Hz to 2 kHz: some marimba zones measure -0.72 file after file, which is one side's polarity
-// flipped; tubular bells sit near 0, a grand piano about 0.3). On a phone or any mono fold the sides
-// cancel and the music goes hollow. Each stereo recording is fixed once, when its bank is registered:
-// a side whose body is clearly inverted is flipped back, then the body is narrowed (mono under 150 Hz,
-// the side at half up to 2 kHz) while the air above 2 kHz keeps its full width.
+// Recordings made with spaced microphones can disagree between the sides in the body of the sound
+// (150 Hz to 2 kHz), and a phone or any mono fold then cancels part of it. Each stereo recording is
+// fixed once, when its bank is registered: a side whose body is clearly inverted is flipped back,
+// then the body is narrowed (mono under 150 Hz, the side at half up to 2 kHz) while the air above
+// 2 kHz keeps its full width. Pack banks are always 48 kHz (tools/sounds.mjs refuses anything else).
 export const RECORDING_WIDTH = Object.freeze({ monoHz: 150, splitHz: 2000, mid: 0.5, high: 1, flipBelow: -0.3 });
 const narrowed = new WeakSet<Float32Array>();
 const bodyCorr = (L: Float32Array, R: Float32Array) => {

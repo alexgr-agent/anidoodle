@@ -1,13 +1,13 @@
 // SOUNDCHECK TESTS. Each fault the scorecard exists to catch, built on purpose in code (a hole, a
-// dead tail, a late start, a decorrelated pair, a sub-heavy mix, a boxy mix, a quiet master, a cut
+// dead tail, a late start, a decorrelated pair, a rumble-heavy mix, a crowded body, a quiet master, a cut
 // ending), and each must show up in its own metric, with a fix that names the time or the band.
-import { analyze, evaluate, fixFirst, visualEvents, visualSync, buildProfile, profileFrom, grade, DEFAULT_PROFILE } from "../src/canvas-core/music/soundcheck";
+import { analyze, evaluate, startHere, visualEvents, visualSync, buildProfile, profileFrom, grade, DEFAULT_PROFILE } from "../src/canvas-core/music/soundcheck";
 import { loudness } from "../src/canvas-core/music/meter";
 
 export const name = "soundcheck";
 export const run = (ok: (cond: boolean, label: string) => void) => {
   const sr = 48000;
-  // mulberry32: a plain LCG's interleaved outputs are correlated per band (it read as a -0.99 low-band correlation)
+  // mulberry32, never a plain LCG: an LCG's interleaved left/right outputs are correlated per band and fake a near -1 low-band correlation
   let seed = 9; const rnd = () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return (((t ^ (t >>> 14)) >>> 0) / 4294967296) * 2 - 1; };
   /** A plucked chord every 0.25 s over a soft pad: music-like, steady, correlated (the same in both ears). */
   const music = (secs: number, { from = 0, to = secs, amp = 0.2 } = {}) => {
@@ -26,7 +26,7 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
   const clean = at(...music(6));
   ok(clean.firstSound === 0 && clean.insideGap === 0 && clean.endSilence < 0.06, `clean mix: first sound ${clean.firstSound} s, longest hole ${clean.insideGap} s, end silence ${clean.endSilence.toFixed(2)} s`);
   ok(Math.abs(clean.monoLoss) < 0.1 && clean.bodyCorr > 0.99 && clean.corr > 0.99, `identical channels fold to mono with ${clean.monoLoss.toFixed(2)} dB extra loss, 150-2k correlation ${clean.bodyCorr.toFixed(2)}`);
-  ok(["insideGap", "endSilence", "firstSound", "bodyCorr", "monoLoss", "sub"].every((k) => row(clean, k).status === "PASS"), "clean mix passes the shape, stereo and sub checks");
+  ok(["insideGap", "endSilence", "firstSound", "bodyCorr", "monoLoss", "rumble"].every((k) => row(clean, k).status === "PASS"), "clean mix passes the shape, stereo and rumble checks");
 
   // the loudness number agrees with the meter, and a -27 LUFS master fails with the gain it needs
   const [qL, qR] = music(6, { amp: 0.02 }), q = at(qL, qR), ref = loudness([qL, qR], sr).integrated;
@@ -39,10 +39,10 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
   const [hL, hR] = music(6); for (let i = 2 * sr; i < 3 * sr; i++) { hL[i] = 0; hR[i] = 0; }
   const hole = at(hL, hR);
   ok(Math.abs(hole.insideGap - 1) <= 0.06 && Math.abs((hole.insideGapAt ?? 0) - 2) <= 0.06, `a 1 s hole at 2.0 s reads ${hole.insideGap.toFixed(2)} s at ${hole.insideGapAt?.toFixed(2)} s`);
-  const hf = fixFirst(evaluate(hole)).find((r) => r.key === "insideGap");
+  const hf = startHere(evaluate(hole)).find((r) => r.key === "insideGap");
   ok(row(hole, "insideGap").status === "FAIL" && /1\.0 s hole at 0:02\.0/.test(hf?.fix ?? ""), `the fix says where: "${hf?.fix?.slice(0, 40)}..."`);
-  ok(!fixFirst(evaluate(hole)).some((r) => r.key === "arcDip"), "the arc dip inside that hole is the same fault: one fix, not two");
-  ok(at(hL, hR, { allow: [[1.9, 3.1]] }).insideGap === 0, "a declared stop-down (--allow 1.9:3.1) is not a hole");
+  ok(!startHere(evaluate(hole)).some((r) => r.key === "arcDip"), "the arc dip inside that hole is the same fault: one fix, not two");
+  ok(at(hL, hR, { allow: [[1.9, 3.1]] }).insideGap === 0, "a declared held breath (--allow 1.9:3.1) is not a hole");
   const [sL, sR] = music(6); for (let i = 2 * sr; i < 2.15 * sr; i++) { sL[i] = 0; sR[i] = 0; }
   ok(row(at(sL, sR), "insideGap").status === "PASS", `a 0.15 s breath is not a hole (${at(sL, sR).insideGap.toFixed(2)} s)`);
 
@@ -59,33 +59,33 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
 
   // a decorrelated pair: independent noise in each ear
   const n = 4 * sr, dL = new Float32Array(n), dR = new Float32Array(n); for (let i = 0; i < n; i++) { dL[i] = 0.1 * rnd(); dR[i] = 0.1 * rnd(); }
-  const dec = at(dL, dR), df = fixFirst(evaluate(dec));
+  const dec = at(dL, dR), df = startHere(evaluate(dec));
   ok(Math.abs(dec.bodyCorr) < 0.1 && Math.abs(dec.monoLoss - 3) < 0.3, `decorrelated pair: 150-2k correlation ${dec.bodyCorr.toFixed(2)}, mono loses ${dec.monoLoss.toFixed(2)} dB past the expected 3`);
   ok(row(dec, "bodyCorr").status === "FAIL" && row(dec, "monoLoss").status === "FAIL" && df.filter((r) => ["bodyCorr", "monoLoss", "corr", "sideMid"].includes(r.key)).length === 1 && /below 2 kHz/.test(df.find((r) => r.key === "bodyCorr")?.fix ?? ""), "it fails, and the four stereo numbers make one fix: narrow the width below 2 kHz");
   // decorrelated only in the body: a 600 Hz tone a quarter-turn apart, a centred 5 kHz tone
   const bL = new Float32Array(n), bR = new Float32Array(n); for (let i = 0; i < n; i++) { const t = i / sr, c = 0.1 * Math.sin(2 * Math.PI * 5000 * t); bL[i] = 0.2 * Math.sin(2 * Math.PI * 600 * t) + c; bR[i] = 0.2 * Math.cos(2 * Math.PI * 600 * t) + c; }
   const body = at(bL, bR);
-  ok(Math.abs(body.bodyCorr) < 0.1 && body.bandCorr.presence > 0.95, `body-only decorrelation is seen per band (150-2k ${body.bodyCorr.toFixed(2)}, presence ${body.bandCorr.presence.toFixed(2)})`);
+  ok(Math.abs(body.bodyCorr) < 0.1 && body.bandCorr.sparkle > 0.95, `body-only decorrelation is seen per band (150-2k ${body.bodyCorr.toFixed(2)}, sparkle ${body.bandCorr.sparkle.toFixed(2)})`);
 
-  // a sub-heavy mix and a boxy one, each with a band-specific fix
+  // a rumble-heavy mix and a crowded body, each with a band-specific fix
   const [uL, uR] = music(4, { amp: 0.05 }); for (let i = 0; i < uL.length; i++) { const v = 0.4 * Math.sin(2 * Math.PI * 40 * (i / sr)); uL[i] += v; uR[i] += v; }
   const sub = at(uL, uR);
-  ok(sub.bands.sub > -3 && row(sub, "sub").status === "FAIL" && /30-40 Hz/.test(row(sub, "sub").fix ?? ""), `sub-heavy: ${sub.bands.sub.toFixed(1)} dB of the energy under 60 Hz, FAIL, "high-pass ... 30-40 Hz"`);
-  ok(clean.bands.sub < -20, `the clean mix keeps ${clean.bands.sub.toFixed(1)} dB under 60 Hz`);
+  ok(sub.bands.rumble > -3 && row(sub, "rumble").status === "FAIL" && /under 40 Hz/.test(row(sub, "rumble").fix ?? ""), `rumble-heavy: ${sub.bands.rumble.toFixed(1)} dB of the energy under 80 Hz, FAIL, "roll off under 40 Hz"`);
+  ok(clean.bands.rumble < -20, `the clean mix keeps ${clean.bands.rumble.toFixed(1)} dB under 80 Hz`);
   const [xL, xR] = music(4, { amp: 0.03 }); for (let i = 0; i < xL.length; i++) { const v = 0.3 * Math.sin(2 * Math.PI * 630 * (i / sr)); xL[i] += v; xR[i] += v; }
   const box = at(xL, xR);
-  ok(row(box, "lowmid").status === "FAIL" && box.peakHz.lowmid === 630 && /630 Hz/.test(row(box, "lowmid").fix ?? ""), `boxy: low-mid ${box.bands.lowmid.toFixed(1)} dB, loudest third-octave ${box.peakHz.lowmid} Hz named in the fix`);
+  ok(row(box, "body").status === "FAIL" && box.peakHz.body === 630 && /630 Hz/.test(row(box, "body").fix ?? ""), `crowded body: ${box.bands.body.toFixed(1)} dB, strongest third-octave ${box.peakHz.body} Hz named in the fix`);
 
-  // a stop-down: a steady bed that dips 15 dB for 0.4 s and snaps back
+  // a held breath: a steady bed that dips 15 dB for 0.4 s and snaps back
   const [pL, pR] = music(6); for (let i = 3 * sr; i < 3.4 * sr; i++) { pL[i] *= 0.18; pR[i] *= 0.18; }
   const sd = at(pL, pR);
-  ok(sd.stopDowns.length === 1 && Math.abs(sd.stopDowns[0].at - 3) < 0.1, `a 0.4 s, 15 dB dip reads as one stop-down at ${sd.stopDowns[0]?.at.toFixed(2)} s`);
+  ok(sd.heldBreaths.length === 1 && Math.abs(sd.heldBreaths[0].at - 3) < 0.1, `a 0.4 s, 15 dB dip reads as one held breath at ${sd.heldBreaths[0]?.at.toFixed(2)} s`);
 
   // the profile: ranges grade PASS / WARN / FAIL, and a built profile moves taste ranges but never the delivery limits
   ok(grade(-14, { min: -16, max: -13, tol: 1 }) === "PASS" && grade(-16.5, { min: -16, max: -13, tol: 1 }) === "WARN" && grade(-18, { min: -16, max: -13, tol: 1 }) === "FAIL" && grade(5, undefined) === "INFO", "grade: inside PASS, within tolerance WARN, beyond FAIL, no range INFO");
   const built = buildProfile("test", [{ file: "a", measures: clean }, { file: "b", measures: tgt }]), prof = profileFrom(built);
   ok(built.metrics.lufs.min <= built.metrics.lufs.median && built.metrics.lufs.median <= built.metrics.lufs.max && built.from.length === 2, `built profile: lufs ${built.metrics.lufs.min}..${built.metrics.lufs.max}, median ${built.metrics.lufs.median}`);
-  ok(JSON.stringify(prof.ranges.endSilence) === JSON.stringify(DEFAULT_PROFILE.ranges.endSilence) && prof.ranges.lufs.min !== DEFAULT_PROFILE.ranges.lufs.min && prof.ranges.presence !== undefined, "a built profile sets the taste ranges (loudness, bands) and keeps the hard ones (end silence)");
+  ok(JSON.stringify(prof.ranges.endSilence) === JSON.stringify(DEFAULT_PROFILE.ranges.endSilence) && prof.ranges.lufs.min !== DEFAULT_PROFILE.ranges.lufs.min && prof.ranges.sparkle !== undefined, "a built profile sets the taste ranges (loudness, bands) and keeps the hard ones (end silence)");
 
   // picture against sound
   const changed = Array.from({ length: 300 }, (_, i) => (i === 30 || i === 120 || i === 210 ? 0.5 : 0.01));

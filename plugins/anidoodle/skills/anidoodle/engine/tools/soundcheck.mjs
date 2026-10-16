@@ -1,7 +1,8 @@
-// SOUNDCHECK. A film-sound scorecard for an agent that cannot hear: every model-free number on a
-// film's decoded mix, each held to a range, then the fixes in the order that matters, with times.
+// SOUNDCHECK. Scores a rendered film's soundtrack from the numbers alone: it decodes the mix, measures
+// it without any model, checks each value against a range, and lists the changes to make, most
+// important first, each tied to a moment in the film.
 //   node tools/soundcheck.mjs <film|file.mp4|file.wav> [--profile references/music/sound-profile.json]
-//        [--allow 3.1:3.6,...] [--video | --no-video] [--json] [--out f.json]
+//        [--allow 3.1:3.6,...] [--no-video] [--json] [--out f.json]
 //   node tools/soundcheck.mjs profile <files...> -o references/music/sound-profile.json [--name "drawing film"]
 // Decodes what a player would (ffmpeg, stereo float at 48 kHz). The metrics are pure functions in
 // src/canvas-core/music/soundcheck.ts (unit-tested on synthetic signals); visual sync reuses
@@ -54,7 +55,7 @@ export const check = async (C, file, { profile, allow = [], video = "auto" } = {
     sync = { ...C.visualSync(events, curves.onsets, measures.durationS), times: events, fps: p.video.fps };
   }
   const rows = C.evaluate(measures, prof);
-  return { file, profile: prof.name, measures, curves, sync, rows, fixes: C.fixFirst(rows), video: p.video, L, R };
+  return { file, profile: prof.name, measures, curves, sync, rows, fixes: C.startHere(rows), video: p.video, L, R };
 };
 
 const pad = (s, n) => String(s).padEnd(n);
@@ -68,10 +69,10 @@ export const report = (C, r) => {
   if (r.sync) {
     const s = r.sync, pct = (v) => (Number.isFinite(v) ? `${Math.round(v * 100)} %` : "n/a");
     o.push(`  ${pad("INFO", 7)}${pad("visual events with an onset", 31)}${pad(`${pct(s.share)} of ${s.events}`, 24)}chance ${pct(s.chance)}`);
-    o.push(`  ${pad("INFO", 7)}${pad("median onset offset", 31)}${pad(Number.isFinite(s.medianOffsetMs) ? `${s.medianOffsetMs > 0 ? "+" : ""}${s.medianOffsetMs} ms` : "n/a", 24)}pros: -45..+75 ms`);
+    o.push(`  ${pad("INFO", 7)}${pad("median onset offset", 31)}${pad(Number.isFinite(s.medianOffsetMs) ? `${s.medianOffsetMs > 0 ? "+" : ""}${s.medianOffsetMs} ms` : "n/a", 24)}a sound may lead its frame a little; a lag reads as late`);
     if (s.unanswered.length) o.push(`  ${pad("INFO", 7)}${pad("events with no sound", 31)}${s.unanswered.slice(0, 8).map(C.fmtT).join(", ")}${s.unanswered.length > 8 ? ` (+${s.unanswered.length - 8})` : ""}`);
   }
-  o.push("", r.fixes.length ? "FIX FIRST" : "FIX FIRST: nothing");
+  o.push("", r.fixes.length ? "START HERE" : "START HERE: nothing to fix");
   r.fixes.forEach((x, i) => o.push(`  ${i + 1}. [${x.status}] ${x.fix}`));
   o.push("", "DETAIL", `  arc (LU vs integrated, 0..100 %): ${m.arc.map((v) => (v === null ? "silent" : (v > 0 ? "+" : "") + v.toFixed(1))).join("  ")}`);
   o.push(`  bands (dB share): ${Object.entries(m.bands).map(([k, v]) => `${k} ${v.toFixed(1)}`).join("  ")}`);
@@ -82,13 +83,13 @@ export const report = (C, r) => {
   return o.join("\n");
 };
 /** The JSON form: no sample buffers, curves trimmed to what a reader can use. */
-export const asJson = (r) => ({ file: r.file, profile: r.profile, verdict: r.rows.some((x) => x.status === "FAIL") ? "FAIL" : "PASS", measures: r.measures, sync: r.sync, rows: r.rows, fixes: r.fixes.map((x) => ({ key: x.key, status: x.status, fix: x.fix, at: x.at })), onsets: r.curves.onsets.map((t) => +t.toFixed(3)), hits: r.curves.hits });
+export const asJson = (r) => ({ file: r.file, profile: r.profile, verdict: r.rows.some((x) => x.status === "FAIL") ? "FAIL" : "PASS", measures: r.measures, sync: r.sync, rows: r.rows, fixes: r.fixes.map((x) => ({ key: x.key, status: x.status, fix: x.fix, at: x.at })), onsets: r.curves.onsets.map((t) => +t.toFixed(3)), accents: r.curves.accents });
 
 if (isMain(import.meta.url)) {
   const argv = process.argv.slice(2), flag = (k) => argv.includes(`--${k}`), opt = (...ks) => { for (const k of ks) { const i = argv.indexOf(k); if (i >= 0) return argv[i + 1]; } return undefined; };
   const VAL = new Set(["--profile", "--out", "--allow", "-o", "--name"]), pos = argv.filter((a, i) => !a.startsWith("-") && !VAL.has(argv[i - 1]));
   const die = (msg, code = 2) => { console.error(msg); process.exit(code); };
-  if (!pos.length) die("usage: node tools/soundcheck.mjs <film|file.mp4|file.wav> [--profile p.json] [--allow a:b] [--video|--no-video] [--json] [--out f.json]\n       node tools/soundcheck.mjs profile <files...> -o references/music/sound-profile.json [--name \"drawing film\"]");
+  if (!pos.length) die("usage: node tools/soundcheck.mjs <film|file.mp4|file.wav> [--profile p.json] [--allow a:b] [--no-video] [--json] [--out f.json]\n       node tools/soundcheck.mjs profile <files...> -o references/music/sound-profile.json [--name \"drawing film\"]");
   const C = await loadCheck();
   try {
     if (pos[0] === "profile") {

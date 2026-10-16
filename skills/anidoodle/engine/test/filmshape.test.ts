@@ -15,6 +15,6 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
   const hole = filmShape(...film(8, (t) => t < 3.1 || t > 6.4), sr);
   ok(kinds(hole) === "hole" && Math.abs(hole.holeS - 3.3) < 0.15, `a 3.3 s hole in the middle is caught (${hole.holeS.toFixed(1)} s)`);
   ok(kinds(filmShape(...film(8, (t) => t < 3.1 || t > 3.3), sr)) === "", "a 0.2 s breath is not a hole");
-  ok(kinds(filmShape(...film(8, (t) => t < 3.1 || t > 4.0), sr, { fps: 30, quiet: [[90, 123, "stop-down before the reveal"]] })) === "", "a declared stop-down is not a fault");
+  ok(kinds(filmShape(...film(8, (t) => t < 3.1 || t > 4.0), sr, { fps: 30, quiet: [[90, 123, "a held breath before the reveal"]] })) === "", "a declared held breath is not a fault");
   ok(kinds(filmShape(...film(4, () => false), sr)) === "silent", "a silent film is caught");
 };

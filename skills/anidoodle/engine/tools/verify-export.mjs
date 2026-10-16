@@ -144,7 +144,7 @@ if (isMp4) {
     if (!Number.isFinite(tp)) note("true peak unreadable from ffmpeg's ebur128", txt.split("\n").slice(-4).join(" "));
     else if (opt.delivery) {
       say(tp <= -1.0, `true peak after the encode ${tp.toFixed(2)} dBTP`, `ceiling -1 dBTP; integrated ${Number.isFinite(il) ? il.toFixed(1) : "?"} LUFS`);
-      // a film that plays quiet reads unfinished: -16 LUFS for gentle films, -14 for dense, a 1 LU window around each
+      // a film that plays quiet reads unfinished: pass between -19 and -13 LUFS, warn from -17
       // -19 is the floor: a gentle score held under -16 by its own peaks (never compressed, by design) may sit near
       // -17.5; under -19 the film is simply quiet. Warn from -17 so the musical cure ("Peaks", music/README.md) is tried
       say(Number.isFinite(il) && il >= -19 && il <= -13, `integrated loudness ${Number.isFinite(il) ? il.toFixed(1) : "?"} LUFS`, "-19..-13 (the delivery master puts gentle films at -16, dense at -14)");

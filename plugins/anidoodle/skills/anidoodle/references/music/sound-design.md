@@ -89,8 +89,8 @@ export const audio = filmSfx(filmAudio(score, 15), plan);   // Film.audio: score
 
 ## Levels and the audibility rule
 
-A cue nobody hears is a bug, not a subtle choice. (The first effects PR sat 13-19 dB under its
-music, and its test only checked that they existed.)
+A cue nobody hears is a bug, not a subtle choice. A test that only checks a cue exists proves
+nothing: test that it is heard over the music at its own moment.
 
 - Every cue is measured against the ducked score **at its own moment**. The yardstick is
   K-weighted (BS.1770) loudness over the cue's *speaking window*: the 10 ms frames within 10 dB of
@@ -120,17 +120,17 @@ music, and its test only checked that they existed.)
   when it starts the groove and mud anywhere else.
 - Hear it in context before it ships. Render the kit page (`node tools/sfx.mjs kit <dir>`) and a
   demo over the real score, and check the audibility table.
-- **The numbers that keep it designed.** About five effects per ten seconds. Hard cuts and cursor
-  drifts get nothing. About two whooshes a film, each starting 100-450 ms before the move and peaking
-  on its fastest frame. One riser, then 0.1-0.5 s of near silence, then the impact on the reveal frame,
-  the loudest moment of the film, 30-60% of the way in. One click voice for the whole UI: press, then
-  release 60-110 ms later, the same level every time. Typing at most about twelve keys a second.
-- **Where a cue may land.** A hit's attack no earlier than 45 ms before its frame and its peak no
-  later than 75 ms after. A whoosh's loudest point within 45 ms of the move's fastest frame. A riser
-  ends between 250 ms before the hit and 30 ms after it. Later than these reads as lag; earlier reads
-  as a mistake.
-- **The ending.** The music stops on a bar or filters down, 0.2-0.7 s of near silence, one soft note
-  in key, and its tail rings out to the last frame, 8-20 dB under the film's peak. Never a cut-off.
+- **Restraint is the design.** A cue earns its place by marking something the viewer should feel: a
+  press, an arrival, a landing, the reveal. Picture changes that are only edits stay silent. Count
+  your cues against the film's length; if you cannot say what each one marks, cut it.
+- **Land on the frame.** A hit belongs on the frame where the thing happens; within a frame either
+  side reads as one event. A soft lead into the hit reads as anticipation. A sound after its picture
+  reads as lag, which is the one error a viewer always notices.
+- **One voice per job.** Every press of every button is the same click, at the same level, so the UI
+  feels like one object. Variety goes to the story moments, not to repeats of the same action.
+- **The ending breathes.** The music settles on the tonic or lets its last chord ring, a beat of
+  near silence before the final mark if the film has one, and the tail rings out to the last frame.
+  Never a cut-off, never dead air after it.
 
 ## The finished mix
 
@@ -144,36 +144,36 @@ What the whole film's sound must be before it ships, score and effects together:
 - **Never digital silence.** An effects-only film sits on room tone 22 dB under its cues (`bed`), nearly
   mono so a phone keeps it, from the first frame to the last.
 - **A finished shape.** Sound from the first frame (within 0.5 s), no hole over 0.25 s, the last sound
-  within 0.5 s of the last frame. A silence the film means (a stop-down, a held breath) is declared in
+  within 0.5 s of the last frame. A silence the film means (a held breath, a pause on a beat) is declared in
   `meta.quiet` as `[fromFrame, toFrame, reason]`. `verify-export --delivery` fails the shape, a true
   peak over -1 dBTP after the encode, and loudness under -19 LUFS; it warns from -17.
-- **Fix one thing at a time, with one fixer.** Read the film through separate lenses (sync, edges and
-  clicks, masking, tone, the director's arc), each proposing its fix as a variant it has measured.
-  Then one fixer merges them and re-runs every check, and a fix that breaks another lens is dropped.
-  Lenses that each edit the mix fight: a tonal cut at 2-6 kHz undoes the masking lens's raised hit.
+
 
 ## Checking the finished film's sound
 
-You cannot hear the film, so measure the delivered mix before anyone listens. Two tools read the
-rendered file (a film name means `out/<name>.mp4`; a `.wav` or `.m4a` works too):
+Before the film goes to anyone, put numbers on the mix that was actually delivered. Two tools take
+the rendered file and do it (give a film name for `out/<name>.mp4`, or point at a `.wav` or `.m4a`):
 
 ```
 node tools/soundcheck.mjs <film|file>                 # the scorecard; exit 1 on any FAIL
 node tools/soundcheck.mjs <film> --json --out x.json  # the same, as data
-node tools/soundcheck.mjs <film> --allow 3.1:3.6      # a hole there is a declared stop-down
+node tools/soundcheck.mjs <film> --allow 3.1:3.6      # the silence there is a declared held breath
 node tools/soundsheet.mjs <film> -o out/<film>-sound.png   # one picture of it all
 ```
 
-`soundcheck` prints a status for every metric (PASS, WARN, FAIL against a range, or INFO), then a
-**FIX FIRST** list in the order that matters, each with its time and the concrete fix: "3.4 s hole
-at 0:03.4", "boxy: cut 500-790 Hz by 2-3 dB", "mids decorrelated: narrow the stereo width below
-2 kHz". It measures:
+Each metric in `soundcheck` gets a status line: PASS, WARN or FAIL when it has a range, INFO when
+it is only reported. Under them comes **START HERE**, the changes to make ranked by importance, and
+every one is specific about where and what: "3.4 s hole at 0:03.4", "crowded body, strongest near
+630 Hz: notch it a couple of dB", "mids decorrelated: narrow the stereo width below 2 kHz". The
+numbers fall into five groups:
 
 - level: integrated LUFS, true peak, loudness range, loudest 3 s, intro and end level, an
   11-point arc, the loudest moment;
-- shape: first sound, holes inside the film, dead air at the end, fade, the final moment, a cut
-  ending, onsets, salient hits, stop-downs;
-- spectrum: six band shares (sub 20-60 Hz up to air 8-16 kHz) and the centroid;
+- shape: when the first sound arrives, any holes mid-film, dead air after the last sound, the fade,
+  the closing moment, an ending that cuts off, how many onsets and accents (sudden jumps in level)
+  there are per second, and held breaths (short dips that come straight back);
+- spectrum: how the energy splits across five bands (rumble, warmth, body, bite and sparkle,
+  20 Hz to 16 kHz), plus the centroid;
 - stereo: side vs mid, L/R correlation overall and per band (150 Hz-2 kHz is where phones comb
   the body away), and how much more than the expected 3 dB the mix loses folded to mono;
 - picture (any file with video): frame-difference events, the share with an onset within 100 ms
@@ -183,17 +183,19 @@ at 0:03.4", "boxy: cut 500-790 Hz by 2-3 dB", "mids decorrelated: narrow the ste
 The built-in ranges are for drawing films: -16 to -13 LUFS (web target -14, gentle films -16),
 true peak at or under -1 dBTP, LRA at most 9 LU, sound by 0.5 s, no hole over 0.25 s, at most
 0.5 s of silence at the end, 150 Hz-2 kHz correlation at least 0.3, at most 1.5 dB of extra mono
-loss, and the sub at or under -6 dB of the energy.
+loss, and the rumble (under 80 Hz) at or under -5 dB of the energy.
 
-To grade against films the user loves, build a profile from them:
+When the user has films whose sound they love, score against those instead:
 `node tools/soundcheck.mjs profile <films...> -o references/music/sound-profile.json`, then pass
-`--profile references/music/sound-profile.json`. A profile moves the taste ranges (loudness,
-bands, width); the delivery limits (true peak, first sound, holes, end silence, mono loss) stay.
+`--profile references/music/sound-profile.json`. The profile shifts the ranges that are a matter
+of taste (loudness, bands, width). The ranges a delivery must meet (true peak, first sound, holes,
+end silence, mono loss) do not move.
 
-`soundsheet` draws a frame strip, the spectrogram, the waveform, momentary and short-term
-loudness against the integrated level and -14, onset ticks, hits and picture events (red when no
-sound answers them), with every hole and the dead tail shaded. Read it before handing the film
-over: the hole, the dead tail and a late hit are visible in it.
+`soundsheet` lays the whole soundtrack out on one timeline, top to bottom: a strip of frames, the
+spectrogram, the waveform, momentary and short-term loudness with the integrated level and -14
+marked, then rows of onsets, accents and picture events (a picture event turns red when no sound
+lands on it). Holes and dead air at the end are shaded. Look at it before handing the film over;
+a gap, a silent ending or a late accent is obvious on the page.
 
 The metrics live in `engine/src/canvas-core/music/soundcheck.ts`, tested on synthetic faults in
 `engine/test/soundcheck.test.ts`.

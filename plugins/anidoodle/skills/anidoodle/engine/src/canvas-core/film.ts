@@ -21,7 +21,7 @@ export type Film = { meta: {
   locked?: [from: number, to: number, reason: string][];
   // a declared hold: the stillness is meant (a word read, an end card); the optional reason is printed by the gate
   holds?: [from: number, to: number, reason?: string][];
-  /** silences the film means (a stop-down before a reveal, a held breath), [fromFrame, toFrame, reason]: verify-export does not count them as holes */
+  /** silences the film means (a held breath before a reveal, a pause on a beat), [fromFrame, toFrame, reason]: verify-export does not count them as holes */
   quiet?: [from: number, to: number, reason?: string][];
   onTwos?: boolean;
   step?: 1 | 2 | 3;

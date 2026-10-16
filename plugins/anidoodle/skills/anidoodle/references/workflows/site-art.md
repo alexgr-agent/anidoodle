@@ -1,96 +1,99 @@
 # Site art: a picture that works on someone's page
 
-A hero beside a headline, a feature tile, a row of spots, a share card. The picture no longer owns its
-canvas: a headline does, a page colour does, a brand does. Kit: `engine/src/canvas-core/assetKit.ts`.
-Worked example: `siteHero.ts` (light page) and `siteHeroDark.ts` (dark page), one source.
+A hero beside a headline, a feature card, a row of icons, a link preview. The picture no longer owns
+its canvas: the page's words, colour and brand come first, and the art is drawn to live among them.
+Kit: `engine/src/canvas-core/assetKit.ts`. Worked example: `siteHero.ts` (a light page) and
+`siteHeroDark.ts` (a dark one), both drawn by the same code.
 
-## 1. The brief, before any drawing
+## 1. Start from the page, not the picture
 
-Write five lines, from the request or as defaults you say out loud:
+Before choosing a subject, write down what the page already decides:
 
-1. **Where it goes:** product, page, section, shown size, what sits beside it.
-2. **The one thing it says:** a promise ("ships in a minute"), a feeling ("unhurried"), or a fact ("works offline").
-3. **Who looks:** engineers read instruments and machines; a family app wants warm, soft, homely things.
-4. **The page:** its exact colour, light or dark or both, and the brand colours.
-5. **The style:** any of the 32. Style is free; craft is not.
+1. **The slot:** which section, what sits beside or above the art, the size it is shown at.
+2. **The page colour,** exactly, and whether the site also has a dark theme.
+3. **The brand colour,** as one hex, and any material the brand is known for (walnut, brass, matte black).
+4. **The sentence the art must back up:** usually the headline next to it.
+5. **The style:** any of the 32. The page constrains placement and colour, never the medium.
 
-## 2. One real object that says it
+## 2. Pick an object that does what the product does
 
-Three kinds, and write one concept of each before choosing:
+Read the sentence from step 1 and ask what the product *does*, as a verb: sorts, connects, protects,
+repeats, measures. Then find a made object that performs that verb visibly, and build it as a machine
+(`machines.md`), so its working carries the message without a caption. Put two or three candidates
+to the user, a line each, name the one you favour and the reason, and go ahead with it unless they
+pick another. When the user has already named the object, skip straight to building it.
 
-- **Literal:** the product as a fine object (a camera for a photo app).
-- **Metaphor:** a real thing whose working is the promise. Software has no body, so this is usually the strongest.
-- **Scene:** a small world on a tray or a shelf, one hero object among a few supporting ones. Good for wide heroes and for sets.
-
-Choose with five quick tests: **glance** (named in a second at its shown size), **promise** (its working says
-it, no caption), **parts** (fifty real parts, not a smooth blob), **page** (its silhouette suits the slot:
-wide and low beside a headline, tall in a column), **brand** (material and era match the mood). Say which
-you pick and why in one line, then build it. If the user already named the object, skip the round.
-
-| The promise | A thing that does it |
+| What the page promises | A made thing that shows it |
 |---|---|
-| Nothing gets lost | A post-office sorting frame, every letter in its slot, one being placed |
-| Fast setup | A flat-pack chair half assembled, the last dowel going in |
-| Team chat | A switchboard, one cable mid-plug, a lamp lit |
-| Privacy | A letterbox with a combination dial, its flap shut |
-| Automation | A marble run: one marble on the track, the next waiting at the gate |
-| Insights | A weather station: anemometer turning, barometer needle, a logbook |
-| Translation | A typewriter with two type baskets, one key mid-strike |
-| Savings | A coin sorter with tubes by size, one coin rolling down the ramp |
-| Learning | A desk globe on a brass meridian, a pin in one city |
-| Music | A cylinder music box, the drum turning, the governor a blur |
+| keeps everything findable | A post-office sorting frame, every letter in its slot, one being placed |
+| sets up in minutes | A flat-pack chair half assembled, the last dowel going in |
+| connects a team | A switchboard, one cable mid-plug, a lamp lit |
+| keeps things private | A letterbox with a combination dial, its flap shut |
+| automates a chain of steps | A marble run: one marble on the track, the next waiting at the gate |
+| turns data into insight | A weather station: anemometer turning, barometer needle, a logbook |
+| translates | A typewriter with two type baskets, one key mid-strike |
+| grows savings | A coin sorter with tubes by size, one coin rolling down the ramp |
+| teaches | A desk globe on a brass meridian, a pin in one city |
+| makes music | A cylinder music box, the drum turning, the governor a blur |
 
-## 3. The moment
+Hold the object's outline up to the space it will fill. Art beside the words suits a broad shape,
+art under the words suits a low, stretched one, and an icon wants a single tight thing.
 
-A picture shown once gets one place for the eye: a drawer half out, a key mid-strike, a lamp lit, a
-coin in the slot. Exactly one, carried by the accent, about a third of the way into the art region on
-the side nearest the text (`strongPoint`). If the accent lands on structure, the eye lands on structure.
+## 3. One place for the eye
+
+Choose the single part that shows the verb happening (the letter going into its slot, the dowel
+going in) and give it the accent material (`accent: true`). `strongPoint(p)` gives a good spot for
+it: a third of the way in, leaning toward the words, or centred when the words sit above.
 
 ## 4. Placement
 
-`PLACEMENTS` holds the canvas, the art region and the headline zone for each slot (heroRight, heroLeft,
-heroCentre, art, tile, spot, banner, social, slide). `Cam.fit(A, E, points, fitBox(p))` fits the object
-into its region; pass every extreme point, lifted parts included. The object leads toward the text: pick
-the azimuth that turns its long face and its moment that way. Nothing enters the headline zone, not a
-shadow, not a sheen; prove it with `node tools/placement.mjs still.png --W <meta.W> --safe x,y,w,h`.
-Keep a few units of air at every edge the object does not deliberately bleed off.
+`PLACEMENTS` holds a canvas, an art region and, where there are words, a headline zone for each slot:
+heroSide, heroSideLeft, heroStack, art, card, icon, strip, social, slide. Fit the object into its
+region with `Cam.fit(A, E, points, fitBox(p))`. Give it every point that could stick out, a raised
+or exploded part included, or the fit will crop it. Swing the azimuth until the side where the work
+happens looks toward the words. Nothing at all is drawn inside the headline zone, and that includes
+a cast shadow or a soft highlight. Check it on a rendered still:
+`node tools/placement.mjs still.png --W <meta.W> --safe x,y,w,h`.
 
-## 5. Page colour, light and dark
+## 5. The page's colour, light and dark
 
-`setPalette(pagePalette({ paper, accent, colours, tint }))` moves every material onto the page: on a
-light page the neutrals shift by the page's difference in lightness and, by `tint`, its colour cast; on
-a dark page the parts sit just above the page, the lit top lightest, the lines lighter than the faces.
-The fill colour of the page and of `paper` must be identical, or every part shows a pale halo. A site
-with both themes gets both films from one source (`heroOn(title, paper, accent)`).
+`setPalette(pagePalette({ paper, accent, colours, tint }))` carries every material over to the page,
+so the machine belongs to it. On a light page each neutral shifts by however much lighter or darker
+the page is than the kit's cream, and `tint` (0 to 1) decides how much of the page's hue the greys
+pick up as well. On a dark page the parts rise only a little above the page: the lit tops are the
+lightest thing, and lines are drawn lighter than the faces they edge. Paint the background in
+`paper` and nothing else; a near miss draws a pale rim round every part. A site with a light and a
+dark theme gets both pictures from the same code, through `heroOn(title, paper, accent)`.
 
-## 6. Brand colour
+## 6. The brand's colour
 
-`accent: "#hex"` puts the brand on the part to watch (`accent: true`); `colours: { wood: "#7a5536" }`
-recolours any material by name, which is also how brass, walnut or ebony are made. Mode **body** makes
-the part of the colour (a five-step ramp in its own hue, lightness set so four tones read and nothing
-glares on dark). Mode **ink** keeps the part neutral and colours only its lines and dots (an LED, a
-pointer, an engraved mark). Default to one brand family: the subject in body, one or two small echoes.
-Colour the moment, never the base or the biggest faces, unless the product is that colour.
+`accent: "#hex"` colours the part from step 3. `colours: { wood: "#7a5536" }` recolours any
+material by name, which is also how a brand's signature material is made. Two modes:
 
-## 7. Motion is the object working
+- **solid** (default): the whole part takes the brand colour. Its five shades all keep that hue,
+  and their lightness is held in a range where each shade is still told apart from the next and
+  none of them burns too bright against a dark background;
+- **lines**: the faces keep their neutral greys and the colour goes only into the strokes and dots,
+  which suits a pointer, a gauge needle or an engraved mark.
 
-Loop one full cycle of the machine so it repeats without a seam. Anything that would turn in life turns;
-fast spinners get `spin(angle, sweep, draw, { disc })`, a sheen disc and fading trails, because bare blades
-read as a paper cut-out. At most three or four kinds of motion, out of step. Beside a headline, calm wins:
-if the real machine moves little, declare it with a `meta.holds` reason instead of inventing motion. Frame 0
-is what a reduced-motion visitor sees, so compose it as the hero frame.
+Put the brand on the part from step 3, and at most once more somewhere small. A brand colour that
+also covers the base and the large panels no longer tells the eye where to go.
 
-## 8. Sets and small sizes
+## 7. Let it move the way it works
 
-Spots in a row share one family of parts (the same screws, feet, bevels, label plates) and similar
-weight: add parts to the sparse one, never strip the dense one. Under about 320 px cut detail instead of
-shrinking it: bigger screws, fewer ticks, no knurls. Check every piece at its shown size and at 390 px
-wide (`placement.mjs --phone out.png`), and look.
+Loop one whole cycle of the machine so it repeats without a seam. Animate the parts the real thing
+would move, and nothing else. A part that turns too fast to see clearly gets
+`spin(angle, sweep, draw, { swept })`: fainter copies of the blades, each a little further back,
+over a faint swept shape, so the eye reads speed rather than slow turning. Next to a headline,
+quiet is better: when the real machine barely moves, say so with a `meta.holds` reason instead of
+inventing movement. A visitor who asks for reduced motion sees frame 0 and nothing more, so build
+frame 0 as a finished picture in its own right.
 
-| Mood | Shape and parts | Colour |
-|---|---|---|
-| Precise | Thin plates, fine bevels, rulers, many small screws | Greys and one sharp accent |
-| Friendly | Big radii, chunky buttons, rubber feet, few large screws | Warm page, a soft accent on the body |
-| Crafted | Wood cheeks, brass fittings, label plates, hinges | Cream page, a deep accent |
-| Calm | Few objects with air between, low heights, one slow motion | Low contrast, a muted accent |
-| Launch | A diagonal, something lifted or in flight | The accent on the moving thing |
+## 8. Families of pictures, and tiny ones
+
+When several pictures will sit together (a row of cards, a strip of icons), build them all from the
+same bin of parts: one screw, one foot, one edge bevel, one camera angle, one accent. Then they
+look like siblings. Compare how busy each one is and bring the emptiest up to the others, not the
+fullest down. At icon size, use fewer parts and make each one bigger, and leave out fine ticks
+altogether. Render each picture at the size the page will actually show it, and again at phone
+width (`placement.mjs --phone out.png`), and look at both.

@@ -113,7 +113,7 @@ MusicPlan + notes (you write)  ->  perform  ->  instruments (one stem per part) 
      Struck stems (plucks, plucked basses, piano, mallets and bells, timpani) first go through a transient-aware
      gain in the mix (only the pick or hammer spike above the note's own body comes down, up to 6 dB, the stem's
      level unchanged), so their attacks don't hold the master under the ceiling. `RenderOpts.gentleGlue` (a <= 1 dB
-     2:1 bus glue) exists but is off by default: Alex's call. If the peak still blocks the gain, the loudness goes
+     2:1 bus glue) exists but is off by default. If the peak still blocks the gain, the loudness goes
      down. The cure is musical (see "Peaks" below): a solo piano with a 10 LU range (the nocturne demo) masters at -17.5.
    - **Dense styles** (lofiElectronic, lofi, drive, house, synthwave, hipHop, rock, chiptune): **-14 LUFS** through a look-ahead true-peak limiter, then a static trim if an inter-sample peak still passes -1 dBTP.
    - **A film's whole mix** (score plus effects, or effects alone) goes through the delivery master last:
@@ -131,11 +131,10 @@ The pack is a separate download (about 390 MB), not part of the skill. Once it i
 acoustic parts play recordings of real instruments and three rooms are recorded impulse responses.
 Without it every score still plays, on the modelled voices, unchanged.
 
-Every stereo recording is made phone-safe when its bank loads (`RECORDING_WIDTH` in `sampler.ts`):
-some were captured with spaced microphones whose sides cancel in the body of the sound (a marimba at
--0.72 between 150 Hz and 2 kHz, one side's polarity flipped), so a side clearly inverted there is
-flipped back and the body narrowed, while the air above 2 kHz keeps its width. On the cheetah score
-this took the mids from -0.15 to 0.85 correlation and the mono-fold loss from 3.5 to 0.6 dB.
+Every stereo recording is made phone-safe when its bank loads (`RECORDING_WIDTH` in `sampler.ts`): a
+side whose body (150 Hz to 2 kHz) is clearly inverted is flipped back and the body is narrowed, while
+the air above 2 kHz keeps its width, so a mono fold keeps the whole instrument.
+
 
 ```bash
 node tools/soundfetch.mjs list          # the install directory and what is installed; no network

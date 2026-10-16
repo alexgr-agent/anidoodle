@@ -1,8 +1,8 @@
 // FILM SHAPE. Whether a film's sound has the shape of a finished piece: it starts with the picture, it
 // never drops out mid-film, and it ends with the film instead of stopping early and leaving dead air.
 // Measured in 100 ms blocks against the mix's own body level (the median of its active blocks), so a
-// quiet film and a loud one are judged alike. A silence the film means (a stop-down before a reveal, a
-// held breath) is declared in meta.quiet as [fromFrame, toFrame, reason] and is not a fault.
+// quiet film and a loud one are judged alike. A silence the film means (a held breath before a reveal, a
+// pause on a beat) is declared in meta.quiet as [fromFrame, toFrame, reason] and is not a fault.
 //   import { filmShape } from "./filmshape.mjs"; filmShape(L, R, sr, { fps, quiet })
 export const SHAPE = Object.freeze({ firstS: 0.5, holeS: 0.25, endS: 0.5, quietDb: 30, bodyDb: 20 });
 

@@ -97,10 +97,10 @@ export const stateAt = (f: number): State => {
   const settled = clamp01((f - T.apart) / 40) * (1 - clamp01((f - T.home + 6) / 6));
   if (settled > 0) PLAN.order.forEach((id, i) => { shares[id] += 0.035 * settled * Math.sin((2 * Math.PI * t) / 2.6 + i * 0.9); });
   let lit = "drum", read = pl.read;
-  if (moving) read = f < T.home ? "TAKING APART" : "PUTTING BACK";
+  if (moving) read = f < T.home ? "EXPLODING" : "REASSEMBLING";
   if (apart) {
     const k = Math.floor(clamp01((f - T.tour[0]) / (T.tour[1] - T.tour[0])) * PLAN.order.length * 0.9999);
-    lit = PLAN.order[f < T.tour[0] ? PLAN.order.length - 1 : k]; read = f < T.tour[0] ? `${PLAN.order.length} ASSEMBLIES APART` : `${PLAN.order.indexOf(lit) + 1}/${PLAN.order.length} · ${ABOUT[lit]}`;
+    lit = PLAN.order[f < T.tour[0] ? PLAN.order.length - 1 : k]; read = f < T.tour[0] ? `${PLAN.order.length} ASSEMBLIES OUT` : `${PLAN.order.indexOf(lit) + 1}/${PLAN.order.length} · ${ABOUT[lit]}`;
   }
   return { rot, shares, lit, read, bend: pl.bend, fan: pl.fan, crank: pl.crank };
 };
@@ -196,9 +196,9 @@ const parts = (c: Cam, s: State): Item[] => {
     const F = frameAlong([60, 12, 19.4], [0, 0, 1]); turned(ctx, c, F, cyl(0, 4, 1.5), M("governor", STEEL), { off: o, lit: lit("governor") });
     const KS = Math.round(20 / (hand().coarse ?? 1)); for (let i = 0; i < 9; i++) { const z0 = 0.3 + i * 0.42; for (let k = 0; k < KS; k++) { const th0 = (k / KS) * 2 * Math.PI + s.fan * 0.15, th1 = th0 + (2 * Math.PI) / KS, f = facingAt(c, F, (th0 + th1) / 2); if (f < 0.05) continue; const A = c.p(at(F, z0 + (k / KS) * 0.42, 1.5, th0)), B = c.p(at(F, z0 + ((k + 1) / KS) * 0.42, 1.5, th1)); ink(ctx, [[A[0] + o[0], A[1] + o[1]], [B[0] + o[0], B[1] + o[1]]], "seam", STEEL, false, smooth(0.05, 0.5, f)); } }
   }, "governor");
-  // the fan turns nine times a drum turn; with `blur` (radians of trail) it reads as spinning, not as a still cut-out
-  const sweep = (s.blur ?? 0), disc = (ctx: Ctx, o: P2) => () => tone(ctx, hull([...circleAt(c, [60, 12, 24.6], 4.6, o), ...circleAt(c, [60, 12, 28.8], 4.6, o)]), M("governor", ZINC), 4); // one shape: see-through bands would stack into stripes
-  [1, -1].forEach((side) => { const ring = vane(s.fan, side), mid = ring.reduce((a, q) => [a[0] + q[0] / 4, a[1] + q[1] / 4], [0, 0]); put(`vane${side}`, [mid[0], mid[1], 26.5], (ctx, o) => spin(s.fan, sweep, (ang) => prism(ctx, c, vane(ang, side), 24.6, 4.2, M("governor", ZINC), { off: o, lit: lit("governor") }), { disc: side > 0 ? disc(ctx, o) : undefined }), "governor", 0); });
+  // the fan turns nine times a drum turn; with `blur` (radians the echoes spread over) it reads as spinning, not as a still cut-out
+  const sweep = (s.blur ?? 0), sweptFan = (ctx: Ctx, o: P2) => () => tone(ctx, hull([...circleAt(c, [60, 12, 24.6], 4.6, o), ...circleAt(c, [60, 12, 28.8], 4.6, o)]), M("governor", ZINC), 4); // one shape: see-through bands would stack into stripes
+  [1, -1].forEach((side) => { const ring = vane(s.fan, side), mid = ring.reduce((a, q) => [a[0] + q[0] / 4, a[1] + q[1] / 4], [0, 0]); put(`vane${side}`, [mid[0], mid[1], 26.5], (ctx, o) => spin(s.fan, sweep, (ang) => prism(ctx, c, vane(ang, side), 24.6, 4.2, M("governor", ZINC), { off: o, lit: lit("governor") }), { swept: side > 0 ? sweptFan(ctx, o) : undefined }), "governor", 0); });
   /** the music box at rest on a page, playing: every part home, the drum turning, the fan a blur */
   put("hub", [60, 12, 26.7], (ctx, o) => turned(ctx, c, frameAlong([60, 12, 24.4], [0, 0, 1]), cyl(0, 4.6, 0.95), M("governor", STEEL), { off: o }), "governor", 0.05);
   put("gcap", [60, 12, 30.6], (ctx, o) => turned(ctx, c, frameAlong([60, 12, 30.2], [0, 0, 1]), cyl(0, 0.8, 1.3), STEEL, { off: o }), "governor", 2);

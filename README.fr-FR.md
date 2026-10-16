@@ -162,7 +162,7 @@ Demandez comment dessiner quelque chose, ou apportez un de vos dessins, et anido
 | **Présentations et documents** | Une famille d'illustrations de section issues d'un seul programme. Une nouvelle graine donne une image sœur dans le même style. |
 | **Récits** | Des storyboards et des animatics qui grandissent jusqu’à devenir un film achevé, de n’importe quelle durée, avec une bande originale. |
 | **Votre propre image** | Apportez un dessin et reprenez son style pour un nouveau sujet, ou apportez une photo et recréez-la dans l’une des 32 manières, chaque trait tracé par le code. |
-| **Pages web** | Des illustrations interactives qui suivent le curseur, réagissent aux clics et aux formulaires, ou se dessinent au fil du défilement. Des visuels de une et des spots à côté de votre titre, aux couleurs de votre page et de votre marque, en clair ou en sombre. |
+| **Pages web** | Des illustrations interactives qui suivent le curseur, réagissent aux clics et aux formulaires, ou se dessinent au fil du défilement. Des visuels d'en-tête et des spots à côté de votre titre, aux couleurs de votre page et de votre marque, en clair ou en sombre. |
 | **Apprentissage** | Des leçons de dessin en étapes et en accéléré, pour comprendre la construction d’une image, les points à observer et les erreurs courantes. |
 | **Personnages** | Un personnage créé une fois, qui reste identique d’un plan, d’une pose et d’un style à l’autre. |
 | **Votre lancement** | Un film de lancement pour votre produit à partir d'un modèle : vos demandes, vos images, vos mots et vos lignes d'installation, montés sur une musique. |

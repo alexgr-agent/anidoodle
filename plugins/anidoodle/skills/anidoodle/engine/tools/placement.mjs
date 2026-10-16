@@ -1,5 +1,5 @@
 // PLACEMENT. Site art has a zone the art must never enter: the headline's. This reads a rendered still
-// and fails if anything (a part, a shadow, a sheen) is drawn there, then writes the picture at phone
+// and fails if anything (a part, a cast shadow, a highlight) is drawn there, then writes the picture at phone
 // width so you look at it the size most visitors will.
 //   node tools/placement.mjs out/hero.png --W 1200 --safe 0,0,480,640 [--paper #faf7f2] [--tol 6] [--phone out/hero-390.png]
 // --W is the film's logical width (meta.W); --safe is in the same units (assetKit PLACEMENTS[...].safe).

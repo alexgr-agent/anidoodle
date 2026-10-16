@@ -65,8 +65,8 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
   ok(REV > 0 && hand().id === "flat", "the kit's default hand is the plain reference hand");
   void flatHand;
 
-  // 7. spin: a slow turn draws the blades once; a fast one trails fainter copies behind, against the travel
+  // 7. spin: a slow turn draws the blades once; a fast one first paints fainter echoes, each further back along the turn
   const calls = (sweep: number) => { const a: number[] = []; spin(1, sweep, (ang) => a.push(ang)); return a; };
   ok(calls(0).length === 1 && calls(0)[0] === 1, "a slow turn draws only the blades");
-  const fast = calls(1.2); ok(fast.length === 5 && fast[fast.length - 1] === 1 && fast.slice(0, -1).every((v) => v < 1), `a fast turn trails ${fast.length - 1} copies behind the blades, drawn first`);
+  const fast = calls(1.2); ok(fast.length === 5 && fast[fast.length - 1] === 1 && fast.slice(0, -1).every((v) => v < 1), `a fast turn paints ${fast.length - 1} fainter echoes before the blades`);
 };

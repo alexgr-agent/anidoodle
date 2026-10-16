@@ -125,10 +125,11 @@ readback, so hashed pages run with `window.__ANI_RASTER__ = "cpu"` from the star
 | Form mascot | 22/22 | 3.5 ms / 0.3 ms (2.2 on an earlier run) | 2.0 s | 152, 31 MB at scale 1.25 | 51 KB (20 KB gzip) |
 | Scroll hero | 22/22 | 1.8 ms / 0.4 ms | 2.0 s | 4 stages + one patch per stroke, 34 MB at 1.25, 58 MB at 2 | 48 KB (19 KB gzip) |
 
-The budget was 6 ms p95 at DPR 2. The first build measured 7.8 ms, because the head rotated ten face
-sprites a frame and the paper multiplied the full canvas every frame. Composing the head once and
-baking the paper into the sprites brought it to 2-4 ms (it varies by run on a shared machine). Single frames reach 10-22 ms when a
-reaction first needs a cel, or during a rescale swap.
+The budget is 6 ms p95 at DPR 2. To stay inside it, compose a multi-part head into one sprite
+instead of rotating each face sprite every frame, and bake the paper texture into the sprites rather
+than multiplying it over the whole canvas each frame; the demos above run at 2-4 ms that way (it
+varies by run on a shared machine). Single frames reach 10-22 ms when a reaction first needs a cel,
+or during a rescale swap.
 
 ## Limits
 

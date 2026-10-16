@@ -1,9 +1,7 @@
-// THE DELIVERY MASTER. The last thing a film's whole mix passes through, score and effects together.
-// Before this, an effects-only film shipped at -27 LUFS and a scored one landed wherever the sum of its
-// parts fell, 4 to 13 LU under its web peers. A film that plays quiet reads unfinished, whatever its timbre.
-// One static gain to the target, then the smooth true-peak limiter, whose work is capped: when getting
-// to the target would need more than `maxLimitDb` of limiting (a mix of sharp hits on near silence), the
-// gain gives way instead of the hits being squashed, and the shortfall is reported, never hidden.
+// THE DELIVERY MASTER. The last thing a film's whole mix passes through, score and effects together:
+// one static gain to the web loudness target, then the smooth true-peak limiter, whose work is capped.
+// When reaching the target would need more than `maxLimitDb` of limiting (sharp hits over near
+// silence), the gain gives way instead of the hits being squashed, and the shortfall is reported.
 import { loudness, truePeak } from "./meter";
 import { smoothLimiter } from "./mixDsp";
 import { db } from "./dsp";
