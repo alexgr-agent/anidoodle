@@ -6,7 +6,7 @@ import { type Piece, type Part, resequence, beatsPerBar } from "./plan";
 import { perform, type Performance, type Played } from "./perform";
 import { renderPiano, PIANO_REAL, type PianoOpts } from "./piano";
 import { keysVoice, renderPianoV2 } from "./keys";
-import { bankFor, pinnedPitch, samplerVoice, sampleZones, registerBank, type SampleBank, type SampleTrim } from "./sampler";
+import { bankFor, measuredTone, pinnedPitch, samplerVoice, sampleZones, registerBank, type SampleBank, type SampleTrim } from "./sampler";
 import * as I from "./instruments";
 import * as O from "./orchestra";
 import { chokeTimes, type KitCtx } from "./drums";
@@ -262,7 +262,7 @@ const renderV2 = (piece: Piece, sr: number, o: RenderOpts = {}): Rendered => {
     let e = partEq(prof, pt.inst, pt.role);
     if (job.kind === "sampled" && (pt.role === "bass" || pt.role === "accomp")) {
       const bank = bankFor(pt.inst, typeof pt.opts?.variant === "string" ? pt.opts.variant : undefined)!;
-      const selected = sampleZones(bank, (o.mixKeys?.[pi] ?? keys).slice().sort((a, b) => a.t - b.t || a.p - b.p), job.seed, pt.opts?.pedal === false ? [] : perf.pedal);
+      const selected = sampleZones(bank, (o.mixKeys?.[pi] ?? keys).slice().sort((a, b) => a.t - b.t || a.p - b.p), job.seed, pt.opts?.pedal === false ? [] : perf.pedal, undefined, measuredTone(bank, pt.opts ?? {}));
       const spectra = selected.map(z => bank.trim?.find(t => t.file === z.zone.file));
       const median = (xs: number[], fallback: number) => xs.length ? xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)] : fallback;
       e = recordedEq(e, pt.role, median(spectra.map(t => t?.bandExcessDb ?? 0), 0), median(spectra.map(t => t?.bandFractionDb ?? -Infinity), -Infinity));

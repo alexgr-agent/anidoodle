@@ -194,6 +194,17 @@ drums and every sound effect are code and stay code.
 - **Soft playing keeps a real attack.** The Steinway bank has three velocity layers and its source
   was normalized, so soft notes come from the soft recording with the modeled piano's velocity law
   rather than a quiet copy of a loud one. Do not add an attack that isn't there.
+- **Between layers and between keys, the tone follows the real takes.** A velocity between two
+  layers plays the louder take softened to the colour read between the real takes of that key
+  (a softer blow is darker, not only quieter), and a key between two recordings takes the colour
+  of the recordings either side, so a moved take does not drag its body resonances along. Both
+  piano banks do this; `opts: { velocityTone: "lowpass" }` brings back the older single filter.
+- **Key-up lets the bass hum.** On the grand the felt stops the upper partials at once while the
+  lowest strings keep a low hum for a moment, as the recorded release takes do.
+  `opts: { release: "flat" }` damps every frequency at one rate.
+- **Measure before you tune.** `node tools/pianoruler.mjs` holds each recording out in turn, plays
+  it from what is left and scores the gap in the real piano's own soft-to-loud steps (1.0 = a
+  whole step off). Change one thing, rerun, keep it only if the number moves the right way.
 - **A real marimba's low notes are rich.** D2 to C4 carries as much as the top of the instrument.
   Keep bass lines out of the melody's register rather than reaching down for the modeled marimba's
   thin bass.

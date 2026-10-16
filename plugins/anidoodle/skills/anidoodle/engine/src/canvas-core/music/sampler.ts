@@ -7,6 +7,8 @@ import { nameOf } from "./theory";
 import { rng } from "../core";
 import { pianoVelocity } from "./keysPiano";
 import { bandWidth } from "./mixDsp";
+import { bandEnvelope, mono } from "./pianoRuler";
+import { PIANO_BANDS } from "./keysTables";
 
 // Recordings made with spaced microphones can disagree between the sides in the body of the sound
 // (150 Hz to 2 kHz), and a phone or any mono fold then cancels part of it. Each stereo recording is
@@ -80,11 +82,75 @@ export const sampleCutoff = (e: SampleEntry, z: SampleZone, k: Played, sr: numbe
   const t = mode !== "asis" ? 1 - Math.max(0, centre - tone) : tone;
   return Math.min(sr * 0.45, 350 + 17650 * t * t);
 };
+// Tone colour. A key played between two recorded loudness layers should take on the tone of a blow at
+// that strength, not only its level: a harder hammer brings the upper partials up much faster than the
+// fundamental. A louder take is picked and softened toward the blow: the measurements showed that
+// darkening a loud take lands far closer to the real softer take than brightening a soft one. A take
+// moved to a neighbouring key also drags its body resonances along with the pitch, so the colour is
+// read between the real takes on either side of the key instead. Each take's tone at the strike (first
+// 150 ms, half-octave bands, level removed) is measured once; the difference between the colour asked
+// for and the colour the moved take brings becomes a gentle octave-band EQ that leaves the overall level
+// to the velocity law. Cuts go deeper than boosts because a boost also lifts the take's noise.
+export const TONE_COLOUR = Object.freeze({ attack: 0.15, cutDb: -18, boostDb: 6, minDb: 0.25, q: 1.41 });
+type Zone = SampleBank["zones"][number];
+const colours = new WeakMap<Float32Array, number[]>();
+const colourOf = (ch: Float32Array[]) => {
+  let c = colours.get(ch[0]); if (c) return c;
+  const env = bandEnvelope(mono(ch), 48000, 0, TONE_COLOUR.attack), total = 10 * Math.log10(env.reduce((s, x) => s + Math.pow(10, x / 10), 0));
+  c = env.map((x) => x - total); colours.set(ch[0], c); return c;
+};
+/** The colour of key `midi` at velocity `v`, read between its layers (one layer step past the end ones at most). */
+const colourAt = (bank: SampleBank, midi: number, art: SampleZone["art"], v: number) => {
+  const byLayer = new Map<number, Zone>();
+  for (const o of bank.zones) if (o.zone.midi === midi && o.zone.art === art && (!byLayer.has(o.zone.layer) || o.zone.rr < byLayer.get(o.zone.layer)!.zone.rr)) byLayer.set(o.zone.layer, o);
+  const pts = [...byLayer.values()].sort((a, b) => a.zone.layer - b.zone.layer).map((o) => ({ c: layerV(bank.entry, o.zone.layer), env: colourOf(o.channels) }));
+  if (pts.length < 2) return pts[0]?.env ?? null;
+  const lo = pts[0].c - (pts[1].c - pts[0].c), hi = pts[pts.length - 1].c + (pts[pts.length - 1].c - pts[pts.length - 2].c), x = clamp(v, lo, hi);
+  let i = 0; while (i < pts.length - 2 && x > pts[i + 1].c) i++;
+  const a = pts[i], b = pts[i + 1], t = (x - a.c) / (b.c - a.c);
+  return a.env.map((y, j) => y + (b.env[j] - y) * t);
+};
+/** A colour moved up by `semis` (half-octave bands: six semitones per band), as resampling moves it. */
+const shiftBands = (c: number[], semis: number) => c.map((_, j) => { const x = clamp(j - semis / 6, 0, c.length - 1), i = Math.min(c.length - 2, Math.floor(x)), t = x - i; return c[i] + (c[i + 1] - c[i]) * t; });
+/** The per-band change (dB, one per PIANO_BANDS entry) that gives zone `z`, played at key `p` and velocity `v`, the colour of the real
+ * takes around it; null when there is nothing to correct. A velocity at or above the take's own layer is never brightened. */
+export const toneColour = (bank: SampleBank, z: Zone, p: number, v: number): number[] | null => {
+  const art = z.zone.art, ownV = layerV(bank.entry, z.zone.layer), vv = Math.min(v, ownV), d = z.zone.unpitched ? 0 : p - z.zone.midi;
+  const keys = [...new Set(bank.zones.filter((o) => o.zone.art === art).map((o) => o.zone.midi))], lo = Math.max(...keys.filter((m) => m <= p)), hi = Math.min(...keys.filter((m) => m >= p));
+  const between = d !== 0 && Number.isFinite(lo) && Number.isFinite(hi) && lo !== hi;
+  if (vv >= ownV && !between) return null;
+  let target: number[] | null;
+  if (between) { const a = colourAt(bank, lo, art, vv), b = colourAt(bank, hi, art, vv), t = (p - lo) / (hi - lo); target = a && b ? a.map((y, j) => y + (b[j] - y) * t) : null; }
+  else target = colourAt(bank, z.zone.midi, art, vv);
+  if (!target) return null;
+  const own = between ? shiftBands(colourOf(z.channels), d) : colourOf(z.channels), raw = target.map((y, j) => y - own[j]);
+  const capped = raw.map((_, j) => clamp((raw[Math.max(0, j - 1)] + 2 * raw[j] + raw[Math.min(raw.length - 1, j + 1)]) / 4, TONE_COLOUR.cutDb, TONE_COLOUR.boostDb));
+  // keep the overall level where the velocity law puts it
+  const before = own.reduce((s, y) => s + Math.pow(10, y / 10), 0), after = own.reduce((s, y, j) => s + Math.pow(10, (y + capped[j]) / 10), 0), shift = 10 * Math.log10(before / after);
+  return capped.map((x) => x + shift);
+};
+const peakDb = (f: number, fc: number, g: number, q: number, sr: number) => {
+  const bq = Biquad.make(sr, "peak", fc, q, g), w = (2 * Math.PI * f) / sr, c1 = Math.cos(w), s1 = Math.sin(w), c2 = Math.cos(2 * w), s2 = Math.sin(2 * w);
+  const nr = bq.b0 + bq.b1 * c1 + bq.b2 * c2, ni = -bq.b1 * s1 - bq.b2 * s2, dr = 1 + bq.a1 * c1 + bq.a2 * c2, di = -bq.a1 * s1 - bq.a2 * s2;
+  return 10 * Math.log10((nr * nr + ni * ni) / (dr * dr + di * di));
+};
+/** Octave peaking filters whose combined response lands on the colour at each octave centre (a few rounds of correction, because neighbours overlap). */
+export const colourFilters = (delta: number[], sr: number) => {
+  const centres = PIANO_BANDS.filter((_, j) => j % 2 === 0), want = delta.filter((_, j) => j % 2 === 0).map((d, k) => (centres[k] < 0.45 * sr ? d : 0)), g = want.slice();
+  for (let round = 0; round < 6; round++) {
+    const got = centres.map((f) => centres.reduce((s, fc, k) => s + (centres[k] < 0.45 * sr ? peakDb(f, fc, g[k], TONE_COLOUR.q, sr) : 0), 0));
+    for (let k = 0; k < g.length; k++) g[k] = clamp(g[k] + 0.8 * (want[k] - got[k]), TONE_COLOUR.cutDb - 6, TONE_COLOUR.boostDb + 6);
+  }
+  return centres.flatMap((fc, k) => (fc < 0.45 * sr && Math.abs(g[k]) >= TONE_COLOUR.minDb ? [Biquad.make(sr, "peak", fc, TONE_COLOUR.q, g[k])] : []));
+};
+const pianoFamily = (bank: SampleBank) => ("id" in bank ? String((bank as RegisteredBank).id) : "").split(".")[0] === "piano";
+/** Tone colour is on for the piano banks unless a voice asks for the older lowpass (or a sampleFilter audition). */
+export const measuredTone = (bank: SampleBank, opts: Opts) => (opts.velocityTone ?? (pianoFamily(bank) ? "measured" : "lowpass")) === "measured" && opts.sampleFilter === undefined;
 export const sampleGain = (e: SampleEntry, z: SampleZone, v: number) => e.normalized ? pianoVelocity(v) * db(-8 * Math.max(0, 0.6 - v)) : v <= 0 ? 0 : db(clamp(16 * (v - layerV(e, z.layer)), -6, 6));
 /** A drum tuned to one note (a timpani in a drum lane) plays that note whatever the lane wrote, moved by octaves into what was recorded. */
 export const pinnedPitch = (pitch: number, range: readonly [number, number] | readonly number[]) => { if (!Number.isFinite(pitch)) throw new Error(`a pinned pitch must be a note number, got ${pitch}`); let p = Math.round(pitch); while (p < range[0]) p += 12; while (p > range[1]) p -= 12; return p < range[0] ? range[0] : p; };
 /** Nearest pitch, then nearest layer, then this note's seeded recording. State stays local to a render. */
-export const sampleZones = (bank: SampleBank, keys: Played[], seed: number, pedal: PedalSpan[] = [], art?: "rel") => {
+export const sampleZones = (bank: SampleBank, keys: Played[], seed: number, pedal: PedalSpan[] = [], art?: "rel", louder = false) => {
   const previous = new Map<string, SampleBank["zones"][number]>(), e = bank.entry, pool = bank.zones.filter(({ zone }) => zone.art === art);
   return keys.map((k, i) => {
     if (k.p < e.range[0] || k.p > e.range[1]) throw new Error(`${e.title}: note ${nameOf(k.p)} (${k.p}) outside range ${nameOf(e.range[0])}-${nameOf(e.range[1])} (${e.range.join("-")})`);
@@ -93,6 +159,8 @@ export const sampleZones = (bank: SampleBank, keys: Played[], seed: number, peda
     const atPitch = pool.filter(({ zone }) => zone.midi === pitch), v = clamp(k.v, 0, 1);
     let layer = 0, delta = Infinity;
     for (const { zone: z } of atPitch) { const d = Math.abs(layerV(e, z.layer) - v); if (d < delta || (Math.abs(d - delta) < 1e-12 && z.layer > layer)) { layer = z.layer; delta = d; } }
+    // with tone colour on, the take at or just above the blow is softened instead (a soft take cannot grow the partials it never had)
+    if (louder) { const up = atPitch.map(({ zone }) => zone.layer).filter((l) => layerV(e, l) >= v - 1e-9); if (up.length) layer = Math.min(...up); }
     const down = !art && pedal.some(([a, b]) => k.t >= a && k.t < b), r = rng(k.vary?.seed ?? ((seed * 7919 + i * 104729 + k.p * 31) >>> 0));
     const pick = (layer: number) => {
       const sus = down ? bank.zones.filter(({ zone }) => zone.art === "sus" && zone.midi === pitch && zone.layer === layer) : [];
@@ -126,11 +194,19 @@ const sincRead = (a: Float32Array, x: number, table: Float64Array) => {
   return y;
 };
 
+// Key-up on a damped string. The felt kills everything above the split in tDamp; below it a bass string
+// rings on for longer (by the recorded release takes: the 30-250 Hz band of the lowest keys falls at
+// roughly a third of the rate of the band above it). `lowMul` is the bass end's stretch, fading to none
+// by middle C, where the fundamental sits above the split anyway. On by default for the grand only: its
+// release takes are what the numbers were checked against (the upright's release takes are key noise).
+export const RELEASE_SPLIT = Object.freeze({ crossHz: 250, lowMul: 3 });
+export const releaseLow = (p: number, tDamp: number, lowMul: number = RELEASE_SPLIT.lowMul) => tDamp * (1 + (lowMul - 1) * clamp((60 - p) / 36, 0, 1));
 export const samplerVoice = (bank: SampleBank, keys: Played[], pedal: PedalSpan[], sr: number, n: number, opts: Opts, seed: number) => {
   if (!Number.isFinite(sr) || sr <= 0 || !Number.isInteger(n) || n < 0) throw new Error("sampler: invalid sample rate or length");
   if (bank.entry.kind !== "struck") throw new Error(`${bank.entry.title}: ${bank.entry.zones.some((z) => !z.loop) ? "sustained zone without a loop" : "sustained banks are not supported in pack version 1"}`);
   const L = new Float32Array(n), R = new Float32Array(n), halo = new Float32Array(n), e = bank.entry;
-  const sorted = keys.slice().sort((a, b) => a.t - b.t || a.p - b.p), usePedal = opts.pedal !== false, zones = sampleZones(bank, sorted, seed, usePedal ? pedal : []);
+  const measured = measuredTone(bank, opts);
+  const sorted = keys.slice().sort((a, b) => a.t - b.t || a.p - b.p), usePedal = opts.pedal !== false, zones = sampleZones(bank, sorted, seed, usePedal ? pedal : [], undefined, measured);
   const releases = e.damped && bank.zones.some(({ zone }) => zone.art === "rel") ? sampleZones(bank, sorted, seed + 401, [], "rel") : null;
   const id = "id" in bank ? String(bank.id) : "", grand = id.split(".")[0] === "piano" && !["upright", "honky"].includes(id.split(".")[1] ?? String(opts.variant));
   const pedalAt = (t: number) => usePedal && pedal.some(([a, b]) => t >= a && t < b);
@@ -141,21 +217,32 @@ export const samplerVoice = (bank: SampleBank, keys: Played[], pedal: PedalSpan[
     const table = rate !== 1 ? sincTable(rate) : null, v = clamp(k.v, 0, 1);
     // Keep the source's layer levels intact. A normalized source gets all its dynamics from this law.
     const gain = sampleGain(e, z, v) * db((k.vary?.db ?? 0) + (bank.trim?.find((t) => t.file === z.file)?.correctionDb ?? 0));
-    const fc = sampleCutoff(e, z, k, sr, typeof opts.sampleFilter === "string" ? opts.sampleFilter : undefined), alpha = 1 - Math.exp(-2 * Math.PI * fc / sr);
+    const tone = clamp(k.tone ?? k.v, 0, 1), colour = measured ? toneColour(bank, zones[idx], k.p, tone) : null;
+    const eqL = colour ? colourFilters(colour, sr) : [], eqR = colour ? colourFilters(colour, sr) : [];
+    const fc = colour ? Infinity : sampleCutoff(e, z, k, sr, typeof opts.sampleFilter === "string" ? opts.sampleFilter : undefined), alpha = 1 - Math.exp(-2 * Math.PI * fc / sr);
     let damp = e.damped ? (pedalAt(k.off) ? pedalUpAfter(k.off) : k.off) : Infinity;
     if (grand && k.p >= 89) damp = Infinity; // the top grand keys have no dampers; vibes and uprights still stop
     const releaseAt = damp;
     if (e.damped) for (let j = idx + 1; j < sorted.length; j++) if (sorted[j].p === k.p && sorted[j].t > k.t) { damp = Math.min(damp, sorted[j].t + 0.004); break; }
     const tDamp = 0.08 + 0.45 * clamp((60 - k.p) / 36, 0, 1), dampI = Math.round((damp - k.t) * sr), dec = Math.exp(-6.91 / (tDamp * sr));
-    const len = Math.min(n - i0, Math.ceil(z.frames / rate), damp === Infinity ? Infinity : dampI + Math.round(tDamp * 1.6 * sr) + 1), inPedal = e.damped && (pedalAt(k.t) || pedalAt(k.t + 0.25));
+    // felt stops the upper partials at once while a long bass string keeps humming under it
+    const split = e.damped && (opts.release ?? (id === "piano" ? "two-band" : "flat")) === "two-band", tLow = split ? releaseLow(k.p, tDamp, typeof opts.releaseLowMul === "number" ? opts.releaseLowMul : undefined) : tDamp, decLow = Math.exp(-6.91 / (tLow * sr)), lowBqL = split ? Biquad.make(sr, "lp", RELEASE_SPLIT.crossHz, 0.707) : null, lowBqR = split ? Biquad.make(sr, "lp", RELEASE_SPLIT.crossHz, 0.707) : null;
+    const len = Math.min(n - i0, Math.ceil(z.frames / rate), damp === Infinity ? Infinity : dampI + Math.round(Math.max(tDamp, tLow) * 1.6 * sr) + 1), inPedal = e.damped && (pedalAt(k.t) || pedalAt(k.t + 0.25));
     const read = (a: Float32Array, i: number) => table ? sincRead(a, i * rate, table) : a[i];
     const rel = releases?.[idx], window = Math.max(1, Math.round(0.02 * sr)); let remaining = 0, count = 0;
-    let l = 0, r = 0, env = 1;
+    let l = 0, r = 0, env = 1, envLow = 1, lowL = 0, lowR = 0;
     for (let i = 0; i < len; i++) {
-      if (i >= dampI) env *= dec;
-      l = fc === Infinity ? read(channels[0], i) : l + alpha * (read(channels[0], i) - l); r = channels.length === 1 ? l : fc === Infinity ? read(channels[1], i) : r + alpha * (read(channels[1], i) - r);
-      const j = i0 + i; if (j < 0) continue;
-      const a = l * gain * env, b = r * gain * env; L[j] += a; R[j] += b;
+      if (i >= dampI) { env *= dec; envLow *= decLow; }
+      let x = read(channels[0], i), y = channels.length === 1 ? x : read(channels[1], i);
+      for (const f of eqL) x = f.tick(x);
+      for (const f of eqR) y = f.tick(y);
+      l = fc === Infinity ? x : l + alpha * (x - l); r = channels.length === 1 && !eqR.length ? l : fc === Infinity ? y : r + alpha * (y - r);
+      const j = i0 + i;
+      let a: number, b: number;
+      if (split) { lowL = lowBqL!.tick(l); lowR = lowBqR!.tick(r); a = (lowL * envLow + (l - lowL) * env) * gain; b = (lowR * envLow + (r - lowR) * env) * gain; }
+      else { a = l * gain * env; b = r * gain * env; }
+      if (j < 0) continue;
+      L[j] += a; R[j] += b;
       if (rel && i >= Math.max(0, dampI - window) && i < dampI) { remaining += (a * a + b * b) * 0.5; count++; }
       if (inPedal) halo[j] += 0.5 * (a + b);
     }
