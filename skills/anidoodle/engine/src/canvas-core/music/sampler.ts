@@ -90,8 +90,11 @@ export const sampleCutoff = (e: SampleEntry, z: SampleZone, k: Played, sr: numbe
 // read between the real takes on either side of the key instead. Each take's tone at the strike (first
 // 150 ms, half-octave bands, level removed) is measured once; the difference between the colour asked
 // for and the colour the moved take brings becomes a gentle octave-band EQ that leaves the overall level
-// to the velocity law. Cuts go deeper than boosts because a boost also lifts the take's noise.
-export const TONE_COLOUR = Object.freeze({ attack: 0.15, cutDb: -18, boostDb: 6, minDb: 0.25, q: 1.41 });
+// to the velocity law. Cuts go deeper than boosts because a boost also lifts the take's noise. `shift`
+// is how much of the resampling's move of the colour is taken out: the full move fitted the held-out
+// keys best but darkened notes halfway between recordings inside fast runs, so half is the default
+// (`opts.toneShift` auditions others).
+export const TONE_COLOUR = Object.freeze({ attack: 0.15, cutDb: -18, boostDb: 6, minDb: 0.25, q: 1.41, shift: 0.5 });
 type Zone = SampleBank["zones"][number];
 const colours = new WeakMap<Float32Array, number[]>();
 const colourOf = (ch: Float32Array[]) => {
@@ -114,7 +117,7 @@ const colourAt = (bank: SampleBank, midi: number, art: SampleZone["art"], v: num
 const shiftBands = (c: number[], semis: number) => c.map((_, j) => { const x = clamp(j - semis / 6, 0, c.length - 1), i = Math.min(c.length - 2, Math.floor(x)), t = x - i; return c[i] + (c[i + 1] - c[i]) * t; });
 /** The per-band change (dB, one per PIANO_BANDS entry) that gives zone `z`, played at key `p` and velocity `v`, the colour of the real
  * takes around it; null when there is nothing to correct. A velocity at or above the take's own layer is never brightened. */
-export const toneColour = (bank: SampleBank, z: Zone, p: number, v: number): number[] | null => {
+export const toneColour = (bank: SampleBank, z: Zone, p: number, v: number, follow: number = TONE_COLOUR.shift): number[] | null => {
   const art = z.zone.art, ownV = layerV(bank.entry, z.zone.layer), vv = Math.min(v, ownV), d = z.zone.unpitched ? 0 : p - z.zone.midi;
   const keys = [...new Set(bank.zones.filter((o) => o.zone.art === art).map((o) => o.zone.midi))], lo = Math.max(...keys.filter((m) => m <= p)), hi = Math.min(...keys.filter((m) => m >= p));
   const between = d !== 0 && Number.isFinite(lo) && Number.isFinite(hi) && lo !== hi;
@@ -123,7 +126,7 @@ export const toneColour = (bank: SampleBank, z: Zone, p: number, v: number): num
   if (between) { const a = colourAt(bank, lo, art, vv), b = colourAt(bank, hi, art, vv), t = (p - lo) / (hi - lo); target = a && b ? a.map((y, j) => y + (b[j] - y) * t) : null; }
   else target = colourAt(bank, z.zone.midi, art, vv);
   if (!target) return null;
-  const own = between ? shiftBands(colourOf(z.channels), d) : colourOf(z.channels), raw = target.map((y, j) => y - own[j]);
+  const own = between ? shiftBands(colourOf(z.channels), d * follow) : colourOf(z.channels), raw = target.map((y, j) => y - own[j]);
   const capped = raw.map((_, j) => clamp((raw[Math.max(0, j - 1)] + 2 * raw[j] + raw[Math.min(raw.length - 1, j + 1)]) / 4, TONE_COLOUR.cutDb, TONE_COLOUR.boostDb));
   // keep the overall level where the velocity law puts it
   const before = own.reduce((s, y) => s + Math.pow(10, y / 10), 0), after = own.reduce((s, y, j) => s + Math.pow(10, (y + capped[j]) / 10), 0), shift = 10 * Math.log10(before / after);
@@ -217,7 +220,7 @@ export const samplerVoice = (bank: SampleBank, keys: Played[], pedal: PedalSpan[
     const table = rate !== 1 ? sincTable(rate) : null, v = clamp(k.v, 0, 1);
     // Keep the source's layer levels intact. A normalized source gets all its dynamics from this law.
     const gain = sampleGain(e, z, v) * db((k.vary?.db ?? 0) + (bank.trim?.find((t) => t.file === z.file)?.correctionDb ?? 0));
-    const tone = clamp(k.tone ?? k.v, 0, 1), colour = measured ? toneColour(bank, zones[idx], k.p, tone) : null;
+    const tone = clamp(k.tone ?? k.v, 0, 1), colour = measured ? toneColour(bank, zones[idx], k.p, tone, typeof opts.toneShift === "number" ? opts.toneShift : undefined) : null;
     const eqL = colour ? colourFilters(colour, sr) : [], eqR = colour ? colourFilters(colour, sr) : [];
     const fc = colour ? Infinity : sampleCutoff(e, z, k, sr, typeof opts.sampleFilter === "string" ? opts.sampleFilter : undefined), alpha = 1 - Math.exp(-2 * Math.PI * fc / sr);
     let damp = e.damped ? (pedalAt(k.off) ? pedalUpAfter(k.off) : k.off) : Infinity;
