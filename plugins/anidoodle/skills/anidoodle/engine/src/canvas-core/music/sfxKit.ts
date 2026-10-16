@@ -351,7 +351,7 @@ const impact: Def = {
   make(c, v) {
     const { sr, r, P } = c, soft = v === "soft", pre = v === "bloom" ? secs(sr, 0.28) : 0, n = pre + secs(sr, soft ? 4.5 : 7.5), b = new Bus(sr, n);
     // 1 sub drop, saturated so small speakers still hear its harmonics
-    const lo = c.j(soft ? 40 : 44, 0.04) * P, subTau = c.j(soft ? 0.32 : 0.6, 0.1), sub = chirp(sr, secs(sr, subTau * 8), (t) => lo + (soft ? 55 : 72) * P * Math.exp(-t / 0.07), ad(0.002, subTau));
+    const lo = c.j(soft ? 40 : 44, 0.04) * P, subTau = c.j(soft ? 0.3 : 0.38, 0.1), sub = chirp(sr, secs(sr, subTau * 8), (t) => lo + (soft ? 55 : 72) * P * Math.exp(-t / 0.07), ad(0.002, subTau));
     b.add(sub.map((x) => Math.tanh(x * 1.8) / Math.tanh(1.8)), pre, 1, 0);
     // 2 punch: dark noise + two chest modes, a hair wide
     b.add(burst(sr, r, 0.35, soft ? 0.05 : 0.07, { lp: soft ? 500 : 950, pink: true }), pre, soft ? 0.9 : 1.3, -0.1, 0.4);

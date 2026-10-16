@@ -131,6 +131,12 @@ The pack is a separate download (about 390 MB), not part of the skill. Once it i
 acoustic parts play recordings of real instruments and three rooms are recorded impulse responses.
 Without it every score still plays, on the modelled voices, unchanged.
 
+Every stereo recording is made phone-safe when its bank loads (`RECORDING_WIDTH` in `sampler.ts`):
+some were captured with spaced microphones whose sides cancel in the body of the sound (a marimba at
+-0.72 between 150 Hz and 2 kHz, one side's polarity flipped), so a side clearly inverted there is
+flipped back and the body narrowed, while the air above 2 kHz keeps its width. On the cheetah score
+this took the mids from -0.15 to 0.85 correlation and the mono-fold loss from 3.5 to 0.6 dB.
+
 ```bash
 node tools/soundfetch.mjs list          # the install directory and what is installed; no network
 node tools/soundfetch.mjs get harp rooms # the one command that downloads: hash, unpack, install (`all` = 373 MB)

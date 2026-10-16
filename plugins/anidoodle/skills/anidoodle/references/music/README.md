@@ -11,6 +11,7 @@ without the pack, is synthesized in code exactly as before. See
 [Recorded instruments](#recorded-instruments-the-optional-sound-pack) below.
 
 Code: `engine/src/canvas-core/music/`. Tools: `engine/tools/music.mjs`, `engine/tools/soundfetch.mjs`.
+To check a finished film's sound: `engine/tools/soundcheck.mjs` and `soundsheet.mjs` ([how](sound-design.md#checking-the-finished-films-sound)).
 
 **Start here: [`compose.md`](compose.md).** It takes you from a brief to an original score. A style
 is a vocabulary: sound, grooves, harmony language, melody rules, arrangement grammar. It is never
@@ -115,6 +116,8 @@ MusicPlan + notes (you write)  ->  perform  ->  instruments (one stem per part) 
      2:1 bus glue) exists but is off by default: Alex's call. If the peak still blocks the gain, the loudness goes
      down. The cure is musical (see "Peaks" below): a solo piano with a 10 LU range (the nocturne demo) masters at -17.5.
    - **Dense styles** (lofiElectronic, lofi, drive, house, synthwave, hipHop, rock, chiptune): **-14 LUFS** through a look-ahead true-peak limiter, then a static trim if an inter-sample peak still passes -1 dBTP.
+   - **A film's whole mix** (score plus effects, or effects alone) goes through the delivery master last:
+     `sound-design.md`, The finished mix.
 
 A film's `audio` is `filmAudio(piece, seconds)`, which returns `(sampleRate) => [L, R]` at exactly
 the film's length. It fits the score first (`fitScore`, below), so the music ends on its phrase at
@@ -127,6 +130,12 @@ fps, frames)` composes your material and fits it.
 The pack is a separate download (about 390 MB), not part of the skill. Once it is installed, eight
 acoustic parts play recordings of real instruments and three rooms are recorded impulse responses.
 Without it every score still plays, on the modelled voices, unchanged.
+
+Every stereo recording is made phone-safe when its bank loads (`RECORDING_WIDTH` in `sampler.ts`):
+some were captured with spaced microphones whose sides cancel in the body of the sound (a marimba at
+-0.72 between 150 Hz and 2 kHz, one side's polarity flipped), so a side clearly inverted there is
+flipped back and the body narrowed, while the air above 2 kHz keeps its width. On the cheetah score
+this took the mids from -0.15 to 0.85 correlation and the mono-fold loss from 3.5 to 0.6 dB.
 
 ```bash
 node tools/soundfetch.mjs list          # the install directory and what is installed; no network

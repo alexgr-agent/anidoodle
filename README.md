@@ -169,7 +169,7 @@ Ask how to draw something, or bring a drawing, and anidoodle rebuilds it as a le
 | **Decks and docs** | A family of section illustrations from one program. A new seed gives a sister image in the same style. |
 | **Stories** | Storyboards and animatics that grow into a finished film of any length, with an original score. |
 | **Your own image** | Bring a picture and get its style on a new subject, or bring a photo and get it recreated in any of the 32 hands, every mark drawn in code. |
-| **Web pages** | Interactive illustrations that watch the cursor, react to clicks and forms, or draw themselves as the page scrolls. |
+| **Web pages** | Interactive illustrations that watch the cursor, react to clicks and forms, or draw themselves as the page scrolls. Hero art and spots that sit beside your headline on your page's own colour and brand, light or dark. |
 | **Learning** | Drawing lessons: step sheets and timelapses that teach how a picture is built, with what to look for and the common mistakes. |
 | **Characters** | One character, built once and kept identical across shots, poses and styles. |
 | **Your launch** | A launch film for your product from a template: your prompts, your pictures, your words and your install lines, cut to a score. |

@@ -120,6 +120,83 @@ music, and its test only checked that they existed.)
   when it starts the groove and mud anywhere else.
 - Hear it in context before it ships. Render the kit page (`node tools/sfx.mjs kit <dir>`) and a
   demo over the real score, and check the audibility table.
+- **The numbers that keep it designed.** About five effects per ten seconds. Hard cuts and cursor
+  drifts get nothing. About two whooshes a film, each starting 100-450 ms before the move and peaking
+  on its fastest frame. One riser, then 0.1-0.5 s of near silence, then the impact on the reveal frame,
+  the loudest moment of the film, 30-60% of the way in. One click voice for the whole UI: press, then
+  release 60-110 ms later, the same level every time. Typing at most about twelve keys a second.
+- **Where a cue may land.** A hit's attack no earlier than 45 ms before its frame and its peak no
+  later than 75 ms after. A whoosh's loudest point within 45 ms of the move's fastest frame. A riser
+  ends between 250 ms before the hit and 30 ms after it. Later than these reads as lag; earlier reads
+  as a mistake.
+- **The ending.** The music stops on a bar or filters down, 0.2-0.7 s of near silence, one soft note
+  in key, and its tail rings out to the last frame, 8-20 dB under the film's peak. Never a cut-off.
+
+## The finished mix
+
+What the whole film's sound must be before it ships, score and effects together:
+
+- **On its loudness target.** The delivery master (`music/delivery.ts`, the last stage of `mixSfx` and
+  `mixLaunch`) sets one static gain to -16 LUFS (gentle) or -14 (dense, launch films), then a smooth
+  true-peak limiter with its work capped (4 dB gentle, 6 dense): past the cap the gain gives way
+  instead of the hits being squashed, and the shortfall is reported. `master: "none"` keeps the old
+  peak-only ceiling. A score-only film keeps its own master (music/README.md, Master).
+- **Never digital silence.** An effects-only film sits on room tone 22 dB under its cues (`bed`), nearly
+  mono so a phone keeps it, from the first frame to the last.
+- **A finished shape.** Sound from the first frame (within 0.5 s), no hole over 0.25 s, the last sound
+  within 0.5 s of the last frame. A silence the film means (a stop-down, a held breath) is declared in
+  `meta.quiet` as `[fromFrame, toFrame, reason]`. `verify-export --delivery` fails the shape, a true
+  peak over -1 dBTP after the encode, and loudness under -19 LUFS; it warns from -17.
+- **Fix one thing at a time, with one fixer.** Read the film through separate lenses (sync, edges and
+  clicks, masking, tone, the director's arc), each proposing its fix as a variant it has measured.
+  Then one fixer merges them and re-runs every check, and a fix that breaks another lens is dropped.
+  Lenses that each edit the mix fight: a tonal cut at 2-6 kHz undoes the masking lens's raised hit.
+
+## Checking the finished film's sound
+
+You cannot hear the film, so measure the delivered mix before anyone listens. Two tools read the
+rendered file (a film name means `out/<name>.mp4`; a `.wav` or `.m4a` works too):
+
+```
+node tools/soundcheck.mjs <film|file>                 # the scorecard; exit 1 on any FAIL
+node tools/soundcheck.mjs <film> --json --out x.json  # the same, as data
+node tools/soundcheck.mjs <film> --allow 3.1:3.6      # a hole there is a declared stop-down
+node tools/soundsheet.mjs <film> -o out/<film>-sound.png   # one picture of it all
+```
+
+`soundcheck` prints a status for every metric (PASS, WARN, FAIL against a range, or INFO), then a
+**FIX FIRST** list in the order that matters, each with its time and the concrete fix: "3.4 s hole
+at 0:03.4", "boxy: cut 500-790 Hz by 2-3 dB", "mids decorrelated: narrow the stereo width below
+2 kHz". It measures:
+
+- level: integrated LUFS, true peak, loudness range, loudest 3 s, intro and end level, an
+  11-point arc, the loudest moment;
+- shape: first sound, holes inside the film, dead air at the end, fade, the final moment, a cut
+  ending, onsets, salient hits, stop-downs;
+- spectrum: six band shares (sub 20-60 Hz up to air 8-16 kHz) and the centroid;
+- stereo: side vs mid, L/R correlation overall and per band (150 Hz-2 kHz is where phones comb
+  the body away), and how much more than the expected 3 dB the mix loses folded to mono;
+- picture (any file with video): frame-difference events, the share with an onset within 100 ms
+  against a chance baseline, the events with no sound, and the median onset offset. INFO only:
+  not every picture change is meant to be a cue.
+
+The built-in ranges are for drawing films: -16 to -13 LUFS (web target -14, gentle films -16),
+true peak at or under -1 dBTP, LRA at most 9 LU, sound by 0.5 s, no hole over 0.25 s, at most
+0.5 s of silence at the end, 150 Hz-2 kHz correlation at least 0.3, at most 1.5 dB of extra mono
+loss, and the sub at or under -6 dB of the energy.
+
+To grade against films the user loves, build a profile from them:
+`node tools/soundcheck.mjs profile <films...> -o references/music/sound-profile.json`, then pass
+`--profile references/music/sound-profile.json`. A profile moves the taste ranges (loudness,
+bands, width); the delivery limits (true peak, first sound, holes, end silence, mono loss) stay.
+
+`soundsheet` draws a frame strip, the spectrogram, the waveform, momentary and short-term
+loudness against the integrated level and -14, onset ticks, hits and picture events (red when no
+sound answers them), with every hole and the dead tail shaded. Read it before handing the film
+over: the hole, the dead tail and a late hit are visible in it.
+
+The metrics live in `engine/src/canvas-core/music/soundcheck.ts`, tested on synthetic faults in
+`engine/test/soundcheck.test.ts`.
 
 ## Tools and checks
 
@@ -128,6 +205,7 @@ node tools/sfx.mjs list                              # kinds, variants, levels, 
 node tools/sfx.mjs one whoosh soft 3 out.mp3         # one sound
 node tools/sfx.mjs kit <dir>                          # every variant x3 + demo + page + meters.json + spectra/
 node tools/sfx.mjs test                               # the gate
+node tools/soundcheck.mjs <film>                      # the finished film's sound (see above)
 ```
 
 The test checks every kind and variant for:

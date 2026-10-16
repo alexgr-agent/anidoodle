@@ -57,9 +57,11 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
     message = ""; try { mixSfx(null, { ...plan, harsh: harsh as SfxHarshOptions }, sr); } catch (e) { message = (e as Error).message; }
     ok(/harsh\./.test(message), `invalid harsh option rejected: ${JSON.stringify(harsh)}`);
   }
+  // Plan 2 re-captured in 0.9.0, when the impact boom's sub tail was shortened (0.6 to 0.38 s decay):
+  // it rang at 44 Hz for nearly 5 s and ate the headroom. Plans 0 and 1 are untouched.
   // Captured from production sources at c1beddfe4264a34d12531dbe931acef611fb0a02,
   // loaded by git show and bundled with these fixtures before the mixer was edited.
-  const hashes = ["5db7c646b1e61b0016c5dd8a114e875f6cedbaed17f6b702a225ba2dcc187a85", "3064c924f76acb857c509a5c294cf043380451d544fda0b5372ce06d33ef133a", "3a42c3f453a9a1a0285bd2287bc9874e6e330fc3bd6baa263587e10443eaa94e"];
+  const hashes = ["5db7c646b1e61b0016c5dd8a114e875f6cedbaed17f6b702a225ba2dcc187a85", "3064c924f76acb857c509a5c294cf043380451d544fda0b5372ce06d33ef133a", "f2fb798441ecf453b18de3ee2c849810e6fd56f4eaa14fd2002600985fb189f6"];
   const frozen = frozenPlans(sr);
   // the old peak-only master stays bit-identical when asked for; the loudness master is tested in delivery.test.ts
   frozen.plans.forEach((p0, i) => { const p = { ...p0, master: "none" as const }, m = mixSfx(frozen.music, p, sr), f = filmSfx(() => frozen.music, p)(sr);

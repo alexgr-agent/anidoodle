@@ -8,6 +8,7 @@ import { Biquad, db } from "./dsp";
 import { MODES } from "./theory";
 import type { Piece } from "./plan";
 import { loudness, truePeak } from "./meter";
+import { deliver, layBed, type Delivered, type MasterMode } from "./delivery";
 
 export type SfxSnap = "none" | "bar" | "beat" | "8th" | "16th";
 export type SfxHarshOptions = { mode?: "report" | "throw" | "tame"; maxLiftDb?: number; maxTiltDb?: number; maxPeakDb?: number };
@@ -38,6 +39,10 @@ export type SfxPlan = {
   minDb?: number;
   /** final true-peak ceiling in dBTP. Default -1. */
   ceilingDb?: number;
+  /** the whole mix's loudness target (delivery.ts): "gentle" -16 LUFS (default), "dense" -14, a number, or "none" for the old peak-only ceiling */
+  master?: MasterMode;
+  /** an effects-only mix (no score) sits on quiet room tone this many dB under its cues, so it never drops to silence between them. Default 22; false for none. */
+  bed?: number | false;
   /** Default report: samples stay frozen. Caps are cue-minus-score band RMS, band-minus-full RMS,
    * and absolute sample peak dBFS. Tame scales cues only, never the score or duck envelope. */
   harsh?: SfxHarshOptions;
@@ -52,7 +57,7 @@ export type SfxHarshness = {
   violations: { metric: "liftDb" | "tiltDb" | "peakDb"; valueDb: number; capDb: number; excessDb: number }[];
   ok: boolean; reductionDb: number; conflict: "audibility floor" | "tilt cannot be fixed by gain" | null;
 };
-export type SfxMix = { L: Float32Array; R: Float32Array; sfx: SfxStereo; music: SfxStereo; duck: Float32Array; placed: PlacedCue[]; audibility: SfxAudibility[]; harshness: SfxHarshness[]; ok: boolean; lufs: number; dbtp: number; limiterDb: number };
+export type SfxMix = { L: Float32Array; R: Float32Array; sfx: SfxStereo; music: SfxStereo; duck: Float32Array; placed: PlacedCue[]; audibility: SfxAudibility[]; harshness: SfxHarshness[]; ok: boolean; lufs: number; dbtp: number; limiterDb: number; delivered?: Delivered };
 
 // test/sfxKitSurvey.ts: all 44 variants, default gain/seed 1, C/90 bpm, 48 kHz, silence and
 // a steady mid-level score. Maxima 16.49 / -0.80 / -1.00; margins 1.01 / 0.55 / 0.50 dB.
@@ -245,11 +250,15 @@ export const mixSfx = (music: SfxStereo | null, p: SfxPlan, sr = 48000): SfxMix 
   for (const pc of placed) { const { L, R } = pc.sound; for (let i = 0; i < L.length && pc.start + i < n; i++) { fxL[pc.start + i] += L[i]; fxR[pc.start + i] += R[i]; } }
   const L = new Float32Array(n), R = new Float32Array(n);
   for (let i = 0; i < n; i++) { L[i] = mL[i] + fxL[i]; R[i] = mR[i] + fxR[i]; }
-  const limiterDb = ceiling(L, R, sr, db((p.ceilingDb ?? -1) - 0.3));
+  // no score: lay the cues on room tone, set against the cues' own loudness
+  if (!music && p.bed !== false && placed.length) layBed(L, R, [fxL, fxR], sr, mixSeed(p.cues.length, p.frames), p.bed ?? 22);
+  // the whole mix to its loudness target, then the ceiling; "none" keeps the old peak-only master
+  const delivered = (p.master ?? "gentle") === "none" ? undefined : deliver(L, R, sr, p.master ?? "gentle", { ceilingDb: (p.ceilingDb ?? -1) - 0.3 });
+  const limiterDb = delivered ? delivered.limitDb : ceiling(L, R, sr, db((p.ceilingDb ?? -1) - 0.3));
   const fade = Math.min(n, secs(sr, 0.015)); for (let i = 0; i < fade; i++) { const g = i / fade; L[n - 1 - i] *= g; R[n - 1 - i] *= g; }
   const audibility = sfxAudibility(placed, [mL, mR], sr, p);
   const lu = n >= secs(sr, 0.4) ? loudness([L, R], sr).integrated : NaN;
-  return { L, R, sfx: [fxL, fxR], music: [mL, mR], duck, placed, audibility, harshness, ok: audibility.every((a) => a.ok), lufs: lu, dbtp: truePeak([L, R]).dbtp, limiterDb };
+  return { L, R, sfx: [fxL, fxR], music: [mL, mR], duck, placed, audibility, harshness, ok: audibility.every((a) => a.ok), lufs: lu, dbtp: truePeak([L, R]).dbtp, limiterDb, delivered };
 };
 
 export const assertSfxAudible = (m: SfxMix) => {

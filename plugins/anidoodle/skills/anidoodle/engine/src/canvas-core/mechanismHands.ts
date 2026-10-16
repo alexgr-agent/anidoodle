@@ -14,6 +14,7 @@ import type { Ctx, Env, Layer, P } from "./core";
 import { Gfx, rng, PENCIL, GRAPHITE } from "./core";
 import { kit, sheet, border, WHITE, CYAN, DIM, DRAFT } from "./blueprintKit";
 import { letter } from "./drafting";
+import { isDark } from "./assetKit";
 import { type Hand, type Material, type P2, type Role, offset, path, rawStroke, flatHand, reveal } from "./mechanismKit";
 
 const hash = (...v: number[]) => { let h = 2166136261; for (const x of v) { h ^= Math.round(x * 8) | 0; h = Math.imul(h, 16777619); } return h >>> 0; };
@@ -169,7 +170,9 @@ export const stippleHand = (ctx0: Ctx, env: Env, frame: number): Hand => {
 const mixHex = (a: string, b: string, t: number) => { const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16)); return "#" + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, "0")).join(""); };
 export const isometricHand = (paper = "#efe8dc", ink = "#2b2a33"): Hand => {
   const tones = new Map<string, [string, string, string]>();
-  const three = (m: Material) => { const k = m.pigment ?? "#9a9a9a"; let t = tones.get(k); if (!t) { t = [mixHex(k, "#1d1a2a", 0.3), k, mixHex(k, "#ffffff", 0.5)]; tones.set(k, t); } return t; };
+  // on a dark page a top lifted halfway to white glares, so the lit top steps up less and the far face sinks more
+  const dark = isDark(paper), up = dark ? 0.26 : 0.5, down = dark ? 0.38 : 0.3;
+  const three = (m: Material) => { const k = m.pigment ?? "#9a9a9a"; let t = tones.get(k); if (!t) { t = [mixHex(k, "#1d1a2a", down), k, mixHex(k, "#ffffff", up)]; tones.set(k, t); } return t; };
   const flat = (ctx: Ctx, pts: P2[], col: string, a = 1) => { ctx.globalAlpha = a; ctx.fillStyle = col; path(ctx, pts); ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 0.5; ctx.lineJoin = "round"; ctx.stroke(); ctx.globalAlpha = 1; };
   const base = flatHand(paper, "#7a7280", "#b9b0a3");
   return {
@@ -184,7 +187,7 @@ export const isometricHand = (paper = "#efe8dc", ink = "#2b2a33"): Hand => {
       else if (role === "chain") { ctx.save(); ctx.setLineDash([6, 4]); rawStroke(ctx, pts, ink, 0.8, false, 0.35 * a, prog); ctx.restore(); }
     },
     dot: (ctx, at, r, m, a) => { ctx.globalAlpha = a; ctx.fillStyle = three(m)[0]; ctx.beginPath(); ctx.arc(at[0], at[1], r, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; },
-    shadow: (ctx, pts, s) => flat(ctx, pts.map(([x, y]) => [x + 6, y + 9] as P2), "#3a3346", 0.13 * s),
+    shadow: (ctx, pts, s) => flat(ctx, pts.map(([x, y]) => [x + 6, y + 9] as P2), dark ? "#000000" : "#3a3346", (dark ? 0.32 : 0.13) * s),
   };
 };
 

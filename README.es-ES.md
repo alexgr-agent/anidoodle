@@ -162,7 +162,7 @@ Pregunta cómo dibujar algo, o trae un dibujo, y anidoodle lo reconstruye como l
 | **Presentaciones y documentos** | Una familia de ilustraciones de sección desde un solo programa. Una nueva semilla da una imagen hermana en el mismo estilo. |
 | **Historias** | Storyboards y animatics que crecen hasta convertirse en una película terminada de cualquier duración, con banda sonora original. |
 | **Tu propia imagen** | Trae un dibujo para aplicar su estilo a otro motivo, o una foto para recrearla en cualquiera de las 32 formas de dibujar, con cada trazo hecho en código. |
-| **Páginas web** | Ilustraciones interactivas que siguen el cursor, reaccionan a clics y formularios, o se dibujan al desplazarte por la página. |
+| **Páginas web** | Ilustraciones interactivas que siguen el cursor, reaccionan a clics y formularios, o se dibujan al desplazarte por la página. Arte de portada y spots junto a tu titular, en el color y la marca de tu página, en claro u oscuro. |
 | **Aprendizaje** | Lecciones de dibujo con láminas paso a paso y timelapses que enseñan cómo se construye una imagen, qué observar y qué errores evitar. |
 | **Personajes** | Un personaje creado una sola vez que se mantiene idéntico entre planos, poses y estilos. |
 | **Tu lanzamiento** | Un vídeo de lanzamiento para tu producto a partir de una plantilla: tus peticiones, tus imágenes, tus palabras y tus líneas de instalación, montado sobre una banda sonora. |

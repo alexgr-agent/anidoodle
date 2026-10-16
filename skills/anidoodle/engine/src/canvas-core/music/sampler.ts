@@ -2,10 +2,31 @@
 import type { Played } from "./perform";
 import type { PedalSpan } from "./piano";
 import type { Opts } from "./keysCore";
-import { clamp, db } from "./dsp";
+import { clamp, db, Biquad } from "./dsp";
 import { nameOf } from "./theory";
 import { rng } from "../core";
 import { pianoVelocity } from "./keysPiano";
+import { bandWidth } from "./mixDsp";
+
+// Recordings made with spaced microphones can be out of phase between the sides in the body of the
+// sound (150 Hz to 2 kHz: some marimba zones measure -0.72 file after file, which is one side's polarity
+// flipped; tubular bells sit near 0, a grand piano about 0.3). On a phone or any mono fold the sides
+// cancel and the music goes hollow. Each stereo recording is fixed once, when its bank is registered:
+// a side whose body is clearly inverted is flipped back, then the body is narrowed (mono under 150 Hz,
+// the side at half up to 2 kHz) while the air above 2 kHz keeps its full width.
+export const RECORDING_WIDTH = Object.freeze({ monoHz: 150, splitHz: 2000, mid: 0.5, high: 1, flipBelow: -0.3 });
+const narrowed = new WeakSet<Float32Array>();
+const bodyCorr = (L: Float32Array, R: Float32Array) => {
+  const f = () => [Biquad.make(48000, "hp", 150, 0.707), Biquad.make(48000, "lp", 2000, 0.707)], a = f(), b = f(); let c = 0, x = 0, y = 0;
+  for (let i = 0; i < L.length; i++) { const l = a[1].tick(a[0].tick(L[i])), r = b[1].tick(b[0].tick(R[i])); c += l * r; x += l * l; y += r * r; }
+  return x * y > 0 ? c / Math.sqrt(x * y) : 1;
+};
+const narrow = (ch: Float32Array[]): Float32Array[] => {
+  if (ch.length !== 2 || narrowed.has(ch[0])) return ch;
+  const L = ch[0].slice(), R = ch[1].slice();
+  if (bodyCorr(L, R) < RECORDING_WIDTH.flipBelow) for (let i = 0; i < R.length; i++) R[i] = -R[i];
+  bandWidth(L, R, 48000, RECORDING_WIDTH); narrowed.add(L); narrowed.add(R); return [L, R];
+};
 
 export type SampleZone = { file: string; midi: number; layer: number; rr: number; frames: number; channels: number; peakDb: number; rmsDb: number; sha256: string; art?: "sus" | "rel"; unpitched?: boolean; measuredHz?: number; loop?: [number, number] };
 export type SampleEntry = { title: string; source: string; license: string; kind: "struck" | "sustained"; range: [number, number]; layers: number; layerVelocity?: number[]; sparse?: boolean; maxShift?: number; damped: boolean; normalized?: boolean; zones: SampleZone[] };
@@ -49,7 +70,7 @@ export const registerBank = (id: string, bank: SampleBank): RegisteredBank => {
   });
   if (!e.zones.some((z) => !z.art)) throw new Error(`${id}: no ordinary sample zones`);
   if (bank.trim && (new Set(bank.trim.map((t) => t.file)).size !== bank.trim.length || bank.trim.some((t) => !e.zones.some((z) => z.file === t.file && z.midi === t.midi && z.layer === t.layer) || ![t.measuredDb, t.modeledDb, t.correctionDb, t.requestedDb ?? 0, t.medianDb ?? 0, t.bandFractionDb ?? 0, t.bandExcessDb ?? 0].every(Number.isFinite) || (t.medianDb !== undefined && Math.abs(t.correctionDb - t.medianDb) > 9.000001) || (t.boostLimited !== undefined && typeof t.boostLimited !== "boolean")))) throw new Error(`${id}: invalid sampled calibration`);
-  const identity = bankIdentity(e), b = { ...bank, id, hash: bank.trim ? hash(JSON.stringify([identity, bank.trim])) : identity }; banks.set(id, b); return b;
+  const identity = bankIdentity(e), b = { ...bank, zones: bank.zones.map((z) => ({ ...z, channels: narrow(z.channels) })), id, hash: bank.trim ? hash(JSON.stringify([identity, bank.trim])) : identity }; banks.set(id, b); return b;
 };
 
 const layerV = (e: SampleEntry, layer: number) => e.layerVelocity?.[layer - 1] ?? (layer - 0.5) / e.layers;

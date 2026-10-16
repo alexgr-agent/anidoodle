@@ -10,6 +10,8 @@ node <skill>/engine/tools/scaffold.mjs ~/art --film intro      # something that 
 
 ## Stills: hero art, spots, covers, cards, diagrams
 
+Art that sits on a site beside a headline, on its page colour and brand: `workflows/site-art.md`.
+
 - **Size is `meta.W` x `meta.H`**, in logical units; `--scale` multiplies it at render time, so
   one source gives a thumbnail (`--scale 0.5`), the page (`1`) and print (`--scale 3`). Common
   shapes: 1600x900 web hero, 1200x630 social card, 1080x1080 square post, 1080x1350 portrait

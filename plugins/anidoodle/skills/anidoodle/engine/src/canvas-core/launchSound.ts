@@ -10,6 +10,7 @@
 // and one impact, at the big reveal only, and nothing at all on its other cuts.
 import { placeSfx, sfxDuck, sfxAudibility, type SfxCue, type SfxPlan, type SfxAudibility, type PlacedCue } from "./music/sfx";
 import { limiter } from "./music/render";
+import { deliver, layBed, type Delivered } from "./music/delivery";
 import { loudness, truePeak } from "./music/meter";
 import type { FilmAudio } from "./film";
 
@@ -25,7 +26,7 @@ const balance = (L: Float32Array, R: Float32Array, p: number) => {
   for (let i = 0; i < L.length; i++) { const m = (L[i] + R[i]) / 2, s = (L[i] - R[i]) / 2; L[i] = m * gl + s; R[i] = m * gr - s; }
 };
 
-export type LaunchMix = { L: Float32Array; R: Float32Array; placed: PlacedCue[]; audibility: SfxAudibility[]; raised: { i: number; role: string; db: number }[]; lufs: number; dbtp: number; ok: boolean };
+export type LaunchMix = { L: Float32Array; R: Float32Array; placed: PlacedCue[]; audibility: SfxAudibility[]; raised: { i: number; role: string; db: number }[]; lufs: number; dbtp: number; ok: boolean; delivered?: Delivered };
 /** Score (null = silent) + the film's cues, panned, ducked, every cue heard, one true-peak ceiling (-1 dBTP). */
 export const mixLaunch = (music: [Float32Array, Float32Array] | null, plan: LaunchPlan, sr = 48000, maxRaise = 8): LaunchMix => {
   const n = Math.round((plan.frames / plan.fps) * sr), cues = plan.cues.map((c) => ({ ...c })), raised = new Map<number, number>();
@@ -45,11 +46,15 @@ export const mixLaunch = (music: [Float32Array, Float32Array] | null, plan: Laun
   }
   const L = new Float32Array(n), R = new Float32Array(n);
   for (let i = 0; i < n; i++) { L[i] = mL[i] + fxL[i]; R[i] = mR[i] + fxR[i]; }
-  limiter(L, R, sr, Math.pow(10, -1.3 / 20));
+  // no score: the cues sit on room tone instead of dropping to silence between them (delivery.ts)
+  if (!music && plan.bed !== false && placed.length) layBed(L, R, [fxL, fxR], sr, plan.cues.length * 7919 + plan.frames, plan.bed ?? 22);
+  // a launch film is dense: the whole mix to -14 LUFS, then the ceiling (delivery.ts); plan.master overrides
+  let delivered: Delivered | undefined;
+  if ((plan.master ?? "dense") === "none") limiter(L, R, sr, Math.pow(10, -1.3 / 20)); else delivered = deliver(L, R, sr, plan.master ?? "dense", { ceilingDb: -1.3 });
   const tp0 = truePeak([L, R]).dbtp; if (tp0 > -1.05) { const g = Math.pow(10, (-1.1 - tp0) / 20); for (let i = 0; i < n; i++) { L[i] *= g; R[i] *= g; } }
   const fade = Math.min(n, Math.round(0.015 * sr)); for (let i = 0; i < fade; i++) { const g = i / fade; L[n - 1 - i] *= g; R[n - 1 - i] *= g; }
   const lu = n >= 0.4 * sr ? loudness([L, R], sr).integrated : NaN;
-  return { L, R, placed, audibility: aud, raised: [...raised].map(([i, db]) => ({ i, role: cues[i].role, db })), lufs: lu, dbtp: truePeak([L, R]).dbtp, ok: aud.every((a) => a.ok) };
+  return { L, R, placed, audibility: aud, raised: [...raised].map(([i, db]) => ({ i, role: cues[i].role, db })), lufs: lu, dbtp: truePeak([L, R]).dbtp, ok: aud.every((a) => a.ok), delivered };
 };
 /** What a Film's audio(sampleRate) returns; throws when a cue is still buried after raising it. */
 export const launchAudio = (music: FilmAudio | null, plan: LaunchPlan) => Object.assign((sr: number): [Float32Array, Float32Array] => {

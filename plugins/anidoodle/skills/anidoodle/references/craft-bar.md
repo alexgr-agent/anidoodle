@@ -25,6 +25,9 @@ The test: would a proud human illustrator ship this, or is it mechanical shape-a
 | Words laid over busy art, a face or the UI | Type gets its own frame by default; over the picture only as a composed label or kinetic line on a calm area (`workflows/launch-video.md`, Type) |
 | A loop playing in place and called "alive" | Real travel through a world that changes as the subject moves |
 | An unmatched hard cut or a sharp swoosh between scenes | A gentle move (a bloom, a flip, a push, the card grows into the frame), or a cut matched on shape, position or beat |
+| Site art on its own white or cream while the page is another colour | `paper` is the page's exact colour; neutrals moved onto it, light and dark from one source (`workflows/site-art.md`) |
+| A part, shadow or sheen creeping under the headline | The headline zone is empty, proved by `tools/placement.mjs` |
+| A spinner drawn as still blades turning slowly | A sheen disc and fading trails (`spin`), so it reads as speed |
 
 **No dead air** in anything that moves: something visibly changes in every second, from frame 0.
 Check it with the tool AND by eye: a creeping camera changes every pixel and satisfies the tool

@@ -37,7 +37,7 @@ say why in one line. Write the answers into a short brief before drawing.
 | A story film, any length | Film workflow below, `references/workflows/long-film.md` |
 | An explainer or infographic; a machine that comes apart to explain an idea, in any style | `references/workflows/explainer.md`, `references/workflows/machines.md` |
 | A launch or product video (their screenshots welcome) | `references/workflows/launch-video.md`; build it on `references/workflows/launch-video-kit.md` |
-| An interactive web animation that reacts to the UI | `references/workflows/interactive.md` |
+| Art for a site (hero by a headline, tiles, spots, share card) on its page colour and brand; or a web animation that reacts to the UI | `references/workflows/site-art.md`; `references/workflows/interactive.md` |
 | A drawing lesson, or "how do I draw this?" | `references/workflows/teach-drawing.md` |
 | A character kept identical in any style (woodcut to toy brick) | `references/workflows/character-consistency.md`, `references/anatomy.md` |
 | A style matched from their image | `references/workflows/adapt-a-style.md` |
