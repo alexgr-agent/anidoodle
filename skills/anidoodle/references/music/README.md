@@ -11,6 +11,7 @@ without the pack, is synthesized in code exactly as before. See
 [Recorded instruments](#recorded-instruments-the-optional-sound-pack) below.
 
 Code: `engine/src/canvas-core/music/`. Tools: `engine/tools/music.mjs`, `engine/tools/soundfetch.mjs`.
+To check a finished film's sound: `engine/tools/soundcheck.mjs` and `soundsheet.mjs` ([how](sound-design.md#checking-the-finished-films-sound)).
 
 **Start here: [`compose.md`](compose.md).** It takes you from a brief to an original score. A style
 is a vocabulary: sound, grooves, harmony language, melody rules, arrangement grammar. It is never

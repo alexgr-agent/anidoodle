@@ -18,7 +18,7 @@ Freeze a copy of the file and note its hash first. Every reading is of that copy
 | **Director** | the contact sheet at one tile per beat, sound off; then each seam as a before/after pair | Whether someone who has never seen the brief could say what the film is about, and feel the payoff. | point, first second, pacing, seams |
 | **Illustrator** | full-size stills of the hardest frames; crops of faces, hands, feet and joins at `--scale 2` | Whether a proud illustrator would sign it, or it is shapes assembled (`craft-bar.md`). | drawing, style |
 | **Motion and finish** | `popscan.mjs`, `gate.mjs`, strips of consecutive frames across every seam and every fast move | Whether anything pops, stalls, jumps or smears that was not meant to. | motion, finish |
-| **Sound and sync** | `music.mjs check` (with its ARC line), `verify-export.mjs`, the cue table against the picture | Whether the sound is one piece with a shape, and lands on the picture. | sound |
+| **Sound and sync** | `music.mjs check` (with its ARC line), `verify-export.mjs`, `soundcheck.mjs` and its `soundsheet.mjs` picture, the cue table against the picture | Whether the sound is one piece with a shape, and lands on the picture. | sound |
 
 Rules that make a reading worth having:
 
