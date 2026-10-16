@@ -1,6 +1,6 @@
 // The piano ruler's measures, tone colour between recorded layers and keys, and the two-band release, on synthetic takes.
 import { bandEnvelope, envelopeGap, ruled, bandDecay, centroidHz, onsetOf } from "../src/canvas-core/music/pianoRuler";
-import { registerBank, clearBanks, samplerVoice, sampleZones, toneColour, colourFilters, releaseLow, measuredTone, RELEASE_SPLIT, type SampleBank, type SampleZone } from "../src/canvas-core/music/sampler";
+import { registerBank, clearBanks, samplerVoice, sampleZones, toneColour, colourFilters, releaseLow, measuredTone, trebleFix, TREBLE_LEVEL, RELEASE_SPLIT, type SampleBank, type SampleZone } from "../src/canvas-core/music/sampler";
 import { PIANO_BANDS } from "../src/canvas-core/music/keysTables";
 import { hz } from "../src/canvas-core/music/theory";
 import type { Played } from "../src/canvas-core/music/perform";
@@ -46,7 +46,7 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
     const ks = [key(60, 0.3)], picked = sampleZones(grand, ks, 1, [], undefined, true)[0].zone.layer, nearest = sampleZones(grand, ks, 1)[0].zone.layer;
     ok(picked === 2 && nearest === 1, `a blow between layers takes the louder layer to soften (louder ${picked}, nearest ${nearest})`);
     const loud = grand.zones.find((z) => z.zone.midi === 60 && z.zone.layer === 3)!, soft = grand.zones.find((z) => z.zone.midi === 60 && z.zone.layer === 1)!;
-    ok(toneColour(grand, loud, 60, 0.9) === null && toneColour(grand, soft, 60, 0.9) === null, "never brightens: at or above the take's own layer there is nothing to do");
+    ok(toneColour(grand, loud, 60, 0.9) === null && toneColour(grand, soft, 60, 0.9) === null, "never brightens: at or above the take's own layer of an even keyboard there is nothing to do");
     const d = toneColour(grand, loud, 60, 0.5)!;
     ok(d.length === PIANO_BANDS.length && d[16] < d[6] - 3, `softening cuts the top more than the body (7.7 kHz ${d[16].toFixed(1)} dB vs 240 Hz ${d[6].toFixed(1)} dB)`);
     ok(d.every((x) => x <= 6 + 12 && x >= -18 - 12), "colour stays inside its caps (plus the level shift)");
@@ -69,6 +69,17 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
     const err = [8, 10, 12, 14].map((j) => Math.abs(resp[j] - ref[j] - want[j]));
     ok(Math.max(...err) < 2, `octave filters land within 2 dB of the colour at the octave centres (worst ${Math.max(...err).toFixed(2)} dB)`);
     ok(colourFilters(PIANO_BANDS.map(() => 0), SR).length === 0, "a flat colour builds no filters");
+
+    // treble level: one dull take among bright neighbours is lifted inside the cap and its neighbours come down
+    const keysOf = (id: string, dull?: number) => { const b = bank(id, [48, 52, 56, 60, 64, 68, 72], 1); b.zones.forEach((z) => { z.channels = [tone(hz(z.zone.midi), z.zone.midi === dull ? 0.55 : 0.85)]; }); return b; };
+    const lev = registerBank("piano", keysOf("piano", 60)), fx = trebleFix(lev), at = (m: number) => { const f = fx.get(lev.zones.find((z) => z.zone.midi === m)!); return f ? Math.max(...f.map(Math.abs)) * Math.sign(f.find((x) => x !== 0)!) : 0; };
+    ok(at(60) > 0 && at(60) <= TREBLE_LEVEL.liftDb + 1e-9, `a dull take is lifted, never past the cap (${at(60).toFixed(1)} dB, cap ${TREBLE_LEVEL.liftDb})`);
+    ok(at(56) < 0 && at(64) < 0, `its brighter neighbours come down to split the rest (${at(56).toFixed(1)}, ${at(64).toFixed(1)} dB)`);
+    const flat = trebleFix(registerBank("piano", keysOf("piano"))), most = Math.max(0, ...[...flat.values()].map((f) => Math.max(...f.map(Math.abs))));
+    ok(most <= 1.5, `an even keyboard gets at most a small touch (${most.toFixed(1)} dB)`);
+    ok(trebleFix(registerBank("piano.upright", keysOf("piano.upright", 60))).size === 0, "the upright is left as recorded");
+    const lifted = toneColour(lev, lev.zones.find((z) => z.zone.midi === 60)!, 60, 0.9);
+    ok(!!lifted && lifted[16] > lifted[6], "a take at its own key and layer still gets its fixed treble shelf");
 
     // two-band release
     ok(releaseLow(24, 0.5) === 0.5 * RELEASE_SPLIT.lowMul && releaseLow(60, 0.1) === 0.1 && releaseLow(84, 0.08) === 0.08, "the low band lingers longest at the bottom and not at all from middle C up");

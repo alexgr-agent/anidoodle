@@ -3,7 +3,7 @@ import type { Played } from "./perform";
 import type { PedalSpan } from "./piano";
 import type { Opts } from "./keysCore";
 import { clamp, db, Biquad } from "./dsp";
-import { nameOf } from "./theory";
+import { nameOf, hz } from "./theory";
 import { rng } from "../core";
 import { pianoVelocity } from "./keysPiano";
 import { bandWidth } from "./mixDsp";
@@ -102,11 +102,62 @@ const colourOf = (ch: Float32Array[]) => {
   const env = bandEnvelope(mono(ch), 48000, 0, TONE_COLOUR.attack), total = 10 * Math.log10(env.reduce((s, x) => s + Math.pow(10, x / 10), 0));
   c = env.map((x) => x - total); colours.set(ch[0], c); return c;
 };
+// Treble level across the keyboard. Single takes can come out duller or brighter than the keys around
+// them (a different strike, a mic nudge), and a run crossing from one take to the next then jumps in
+// brightness. Each take's treble against its body is compared with what the takes on either side
+// predict for it (same layer, same articulation); a take that stands out past the usual spread gets a
+// fixed, gentle shelf toward the line. A dull take is lifted at most `liftDb` (a lift also raises its noise) and the
+// brighter neighbours come down by `share` of what is left, so the step is split instead of boosted.
+export const TREBLE_LEVEL = Object.freeze({ cutDb: -9, liftDb: 4, share: 0.5, reach: 2, spreadDb: 3, stepDb: 6 });
+const power = (c: number[], js: number[]) => 10 * Math.log10(js.reduce((s, j) => s + Math.pow(10, c[j] / 10), 0));
+const regions = (f0: number) => {
+  const body = PIANO_BANDS.flatMap((f, j) => (f >= 0.7 * f0 && f <= 2.8 * f0 ? [j] : [])), treble = PIANO_BANDS.flatMap((f, j) => (f >= Math.max(1500, 3 * f0) && f <= 12000 ? [j] : []));
+  return { body, treble };
+};
+const tiltOf = (c: number[], f0: number) => { const { body, treble } = regions(f0); return body.length && treble.length ? power(c, treble) - power(c, body) : NaN; };
+const shelf = (f0: number, db: number) => { const { body, treble } = regions(f0), top = Math.max(...body, -1); return PIANO_BANDS.map((_, j) => (treble.includes(j) ? db : j > top && j < Math.min(...treble) ? db / 2 : j > Math.max(...treble) ? db : 0)); };
+const fixes = new WeakMap<object, Map<Zone, number[]>>();
+/** The fixed shelf (dB per band) each take gets toward the treble level of its neighbours. */
+export const trebleFix = (bank: SampleBank) => {
+  let out = fixes.get(bank.zones); if (out) return out;
+  out = new Map(); const T = TREBLE_LEVEL, groups = new Map<string, Zone[]>();
+  if (("id" in bank ? String((bank as RegisteredBank).id) : "") !== "piano") { fixes.set(bank.zones, out); return out; } // measured on the grand only (it made the upright's held-out keys worse)
+  for (const o of bank.zones) if (o.zone.art !== "rel" && !o.zone.unpitched) { const k = `${o.zone.art ?? ""}|${o.zone.layer}|${o.zone.rr}`; groups.set(k, [...(groups.get(k) ?? []), o]); }
+  for (const g of groups.values()) {
+    g.sort((a, b) => a.zone.midi - b.zone.midi);
+    const t = g.map((o) => tiltOf(colourOf(o.channels), hz(o.zone.midi)));
+    const want = g.map((o, i) => {
+      // a straight line through the takes on either side (the take itself left out) follows the
+      // register's own slope; only what stands out past the usual take-to-take spread is corrected
+      const xs: number[] = [], ys: number[] = [];
+      for (let k = Math.max(0, i - T.reach); k <= Math.min(g.length - 1, i + T.reach); k++) if (k !== i && Number.isFinite(t[k])) { xs.push(g[k].zone.midi); ys.push(t[k]); }
+      if (xs.length < 2 || !Number.isFinite(t[i]) || !xs.some((x) => x < o.zone.midi) || !xs.some((x) => x > o.zone.midi)) return 0;
+      const mx = xs.reduce((p, q) => p + q, 0) / xs.length, my = ys.reduce((p, q) => p + q, 0) / ys.length; let num = 0, den = 0;
+      xs.forEach((x, k) => { num += (x - mx) * (ys[k] - my); den += (x - mx) * (x - mx); });
+      const r = my + (den ? num / den : 0) * (o.zone.midi - mx) - t[i];
+      return Math.sign(r) * Math.max(0, Math.abs(r) - T.spreadDb);
+    });
+    const corr = want.map((w) => clamp(w, T.cutDb, T.liftDb));
+    want.forEach((w, i) => { const left = w - corr[i]; if (left > 0) for (const j of [i - 1, i + 1]) if (j >= 0 && j < g.length) corr[j] = clamp(corr[j] - T.share * left, T.cutDb, T.liftDb); });
+    // a register can also turn a corner between two neighbouring takes with neither one odd on its own;
+    // a run across that corner then jumps. Steps wider than `stepDb` are split: the duller take is lifted
+    // (inside the cap) and the brighter one comes down by the rest.
+    for (let pass = 0; pass < 3; pass++) for (let i = 0; i + 1 < g.length; i++) {
+      if (!Number.isFinite(t[i]) || !Number.isFinite(t[i + 1])) continue;
+      const a = t[i] + corr[i], b = t[i + 1] + corr[i + 1], excess = Math.abs(a - b) - T.stepDb; if (excess <= 0) continue;
+      const [dull, bright] = a < b ? [i, i + 1] : [i + 1, i], lift = Math.min(excess / 2, T.liftDb - corr[dull]);
+      corr[dull] += Math.max(0, lift); corr[bright] = clamp(corr[bright] - (excess - Math.max(0, lift)), T.cutDb, T.liftDb);
+    }
+    g.forEach((o, i) => { if (Math.abs(corr[i]) >= TONE_COLOUR.minDb) out!.set(o, shelf(hz(o.zone.midi), corr[i])); });
+  }
+  fixes.set(bank.zones, out); return out;
+};
+const levelled = (bank: SampleBank, o: Zone) => { const c = colourOf(o.channels), f = trebleFix(bank).get(o); return f ? c.map((y, j) => y + f[j]) : c; };
 /** The colour of key `midi` at velocity `v`, read between its layers (one layer step past the end ones at most). */
 const colourAt = (bank: SampleBank, midi: number, art: SampleZone["art"], v: number) => {
   const byLayer = new Map<number, Zone>();
   for (const o of bank.zones) if (o.zone.midi === midi && o.zone.art === art && (!byLayer.has(o.zone.layer) || o.zone.rr < byLayer.get(o.zone.layer)!.zone.rr)) byLayer.set(o.zone.layer, o);
-  const pts = [...byLayer.values()].sort((a, b) => a.zone.layer - b.zone.layer).map((o) => ({ c: layerV(bank.entry, o.zone.layer), env: colourOf(o.channels) }));
+  const pts = [...byLayer.values()].sort((a, b) => a.zone.layer - b.zone.layer).map((o) => ({ c: layerV(bank.entry, o.zone.layer), env: levelled(bank, o) }));
   if (pts.length < 2) return pts[0]?.env ?? null;
   const lo = pts[0].c - (pts[1].c - pts[0].c), hi = pts[pts.length - 1].c + (pts[pts.length - 1].c - pts[pts.length - 2].c), x = clamp(v, lo, hi);
   let i = 0; while (i < pts.length - 2 && x > pts[i + 1].c) i++;
@@ -117,20 +168,20 @@ const colourAt = (bank: SampleBank, midi: number, art: SampleZone["art"], v: num
 const shiftBands = (c: number[], semis: number) => c.map((_, j) => { const x = clamp(j - semis / 6, 0, c.length - 1), i = Math.min(c.length - 2, Math.floor(x)), t = x - i; return c[i] + (c[i + 1] - c[i]) * t; });
 /** The per-band change (dB, one per PIANO_BANDS entry) that gives zone `z`, played at key `p` and velocity `v`, the colour of the real
  * takes around it; null when there is nothing to correct. A velocity at or above the take's own layer is never brightened. */
-export const toneColour = (bank: SampleBank, z: Zone, p: number, v: number, follow: number = TONE_COLOUR.shift): number[] | null => {
+export const toneColour = (bank: SampleBank, z: Zone, p: number, v: number, follow: number = TONE_COLOUR.shift, align = 0): number[] | null => {
   const art = z.zone.art, ownV = layerV(bank.entry, z.zone.layer), vv = Math.min(v, ownV), d = z.zone.unpitched ? 0 : p - z.zone.midi;
   const keys = [...new Set(bank.zones.filter((o) => o.zone.art === art).map((o) => o.zone.midi))], lo = Math.max(...keys.filter((m) => m <= p)), hi = Math.min(...keys.filter((m) => m >= p));
   const between = d !== 0 && Number.isFinite(lo) && Number.isFinite(hi) && lo !== hi;
-  if (vv >= ownV && !between) return null;
   let target: number[] | null;
-  if (between) { const a = colourAt(bank, lo, art, vv), b = colourAt(bank, hi, art, vv), t = (p - lo) / (hi - lo); target = a && b ? a.map((y, j) => y + (b[j] - y) * t) : null; }
+  if (between) { const a = colourAt(bank, lo, art, vv), b = colourAt(bank, hi, art, vv), t = (p - lo) / (hi - lo); const sa = a && shiftBands(a, (p - lo) * align), sb = b && shiftBands(b, (p - hi) * align); target = sa && sb ? sa.map((y, j) => y + (sb[j] - y) * t) : null; }
   else target = colourAt(bank, z.zone.midi, art, vv);
   if (!target) return null;
   const own = between ? shiftBands(colourOf(z.channels), d * follow) : colourOf(z.channels), raw = target.map((y, j) => y - own[j]);
   const capped = raw.map((_, j) => clamp((raw[Math.max(0, j - 1)] + 2 * raw[j] + raw[Math.min(raw.length - 1, j + 1)]) / 4, TONE_COLOUR.cutDb, TONE_COLOUR.boostDb));
   // keep the overall level where the velocity law puts it
   const before = own.reduce((s, y) => s + Math.pow(10, y / 10), 0), after = own.reduce((s, y, j) => s + Math.pow(10, (y + capped[j]) / 10), 0), shift = 10 * Math.log10(before / after);
-  return capped.map((x) => x + shift);
+  const delta = capped.map((x) => x + shift);
+  return delta.some((x) => Math.abs(x) >= TONE_COLOUR.minDb) ? delta : null;
 };
 const peakDb = (f: number, fc: number, g: number, q: number, sr: number) => {
   const bq = Biquad.make(sr, "peak", fc, q, g), w = (2 * Math.PI * f) / sr, c1 = Math.cos(w), s1 = Math.sin(w), c2 = Math.cos(2 * w), s2 = Math.sin(2 * w);
@@ -220,7 +271,7 @@ export const samplerVoice = (bank: SampleBank, keys: Played[], pedal: PedalSpan[
     const table = rate !== 1 ? sincTable(rate) : null, v = clamp(k.v, 0, 1);
     // Keep the source's layer levels intact. A normalized source gets all its dynamics from this law.
     const gain = sampleGain(e, z, v) * db((k.vary?.db ?? 0) + (bank.trim?.find((t) => t.file === z.file)?.correctionDb ?? 0));
-    const tone = clamp(k.tone ?? k.v, 0, 1), colour = measured ? toneColour(bank, zones[idx], k.p, tone, typeof opts.toneShift === "number" ? opts.toneShift : undefined) : null;
+    const tone = clamp(k.tone ?? k.v, 0, 1), colour = measured ? toneColour(bank, zones[idx], k.p, tone, typeof opts.toneShift === "number" ? opts.toneShift : undefined, typeof opts.toneAlign === "number" ? opts.toneAlign : undefined) : null;
     const eqL = colour ? colourFilters(colour, sr) : [], eqR = colour ? colourFilters(colour, sr) : [];
     const fc = colour ? Infinity : sampleCutoff(e, z, k, sr, typeof opts.sampleFilter === "string" ? opts.sampleFilter : undefined), alpha = 1 - Math.exp(-2 * Math.PI * fc / sr);
     let damp = e.damped ? (pedalAt(k.off) ? pedalUpAfter(k.off) : k.off) : Infinity;

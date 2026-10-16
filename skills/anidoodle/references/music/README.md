@@ -199,6 +199,9 @@ drums and every sound effect are code and stay code.
   (a softer blow is darker, not only quieter), and a key between two recordings takes the colour
   of the recordings either side, so a moved take does not drag its body resonances along. Both
   piano banks do this; `opts: { velocityTone: "lowpass" }` brings back the older single filter.
+  On the grand, a take whose treble stands out from the takes either side, or a corner in the
+  register between two neighbouring takes, gets a fixed gentle shelf when the bank loads: the
+  duller take is lifted at most 4 dB and the brighter one comes down by the rest.
 - **Key-up lets the bass hum.** On the grand the felt stops the upper partials at once while the
   lowest strings keep a low hum for a moment, as the recorded release takes do.
   `opts: { release: "flat" }` damps every frequency at one rate.
