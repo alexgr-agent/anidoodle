@@ -52,6 +52,37 @@ export const MIN_PX = { phone: { read: 32, chrome: 24, type: 64 }, desk: { read:
 const NARROW = new Set([..."il.,:;'|!ijtf()[] "]), SEMI = new Set([..."rsz-\"*"]), WIDE = new Set([..."mw"]), CAPW = new Set([..."MW"]);
 export const estWidth = (text: string, px: number) => [...text].reduce((a, ch) => a + px * (NARROW.has(ch) ? 0.3 : SEMI.has(ch) ? 0.48 : WIDE.has(ch) ? 0.88 : CAPW.has(ch) ? 0.98 : /[A-Z]/.test(ch) ? 0.72 : /[0-9]/.test(ch) ? 0.6 : 0.6), 0);
 export const monoWidth = (text: string, px: number) => text.length * px * 0.61;
+
+// Install lines as the end card's panel rows. Each line keeps one row while every line can be at least
+// `min` px mono in `avail` px; a line that cannot wraps at a natural break, a space first (after the
+// command word), then before "@" or after "/". Its continuation rows hang INDENT characters in, with no
+// prompt glyph, so the command still reads as one line to type. A line with no break that fits stays
+// whole (the size check then refuses it). px: the mono size every row is set at, at most `cap`.
+export type InstallRow = { text: string; indent: number };
+export const INSTALL_INDENT = 2;
+export const installRows = (lines: string[], avail: number, min: number, cap: number): { rows: InstallRow[]; px: number; wrapped: boolean } => {
+  const px0 = Math.min(cap, ...lines.map((s) => avail / (s.length * 0.61)));
+  if (px0 >= min) return { rows: lines.map((text) => ({ text, indent: 0 })), px: px0, wrapped: false };
+  const most = Math.floor(avail / (min * 0.61)); // characters a row holds at the minimum size
+  // where a line may break: [end of this row, start of the next]; a space is dropped, "@" opens the next row, "/" closes this one
+  const breaks = (t: string, kind: "space" | "mark") => [...t].flatMap((ch, i) => (kind === "space" ? (ch === " " && i > 0 ? [[i, i + 1]] : []) : ch === "@" && i > 0 ? [[i, i]] : ch === "/" && i > 0 && i < t.length - 1 ? [[i + 1, i + 1]] : []));
+  const wrap = (t: string, indent: number): InstallRow[] | null => {
+    if (t.length + indent <= most) return [{ text: t, indent }];
+    // two rows if any break gives two (a space first, the longest first row), else more
+    for (const kind of ["space", "mark"] as const) for (const [end, next] of breaks(t, kind).reverse()) if (end + indent <= most && t.length - next + INSTALL_INDENT <= most) return [{ text: t.slice(0, end), indent }, { text: t.slice(next), indent: INSTALL_INDENT }];
+    for (const kind of ["space", "mark"] as const) {
+      // the longest first row that fits, whose rest can be wrapped in turn
+      for (const [end, next] of breaks(t, kind).reverse()) {
+        if (end + indent > most) continue;
+        const rest = wrap(t.slice(next), INSTALL_INDENT);
+        if (rest) return [{ text: t.slice(0, end), indent }, ...rest];
+      }
+    }
+    return null;
+  };
+  const rows = lines.flatMap((t) => (avail / (t.length * 0.61) >= min ? [{ text: t, indent: 0 }] : wrap(t, 0) ?? [{ text: t, indent: 0 }]));
+  return { rows, px: Math.min(cap, ...rows.map((r) => avail / ((r.text.length + r.indent) * 0.61))), wrapped: rows.length > lines.length };
+};
 export const wrapEst = (text: string, px: number, maxW: number): string[] => {
   const out: string[] = []; let line = "";
   for (const w of text.split(" ")) { const t = line ? `${line} ${w}` : w; if (!line || estWidth(t, px) <= maxW) line = t; else { out.push(line); line = w; } }
@@ -66,7 +97,7 @@ export type LaunchLayout = {
   cam: { home: Cam; macroZ: number; macroCreep: number; macroX0: number; macroY: number; follow: boolean; leanZ: number; pointerOff: P; pointerS: number; pointerOn: P };
   bug: { x: number; y: number; px: number };
   type: { maxW: number; cap1: number; capN: number; minPx: number; cover: number; at?: P }; // at: the words' centre when it is not the frame's
-  end: { cx: number; titleY: number; titleMax: number; titleW: number; tagline: string[]; taglineY: number; taglinePx: number; taglineLH: number; panelY: number; monoPx: number; rowH: number; padX: number; lineY0: number; footerPx: number; footerY: number; caret: [number, number] };
+  end: { cx: number; titleY: number; titleMax: number; titleW: number; tagline: string[]; taglineY: number; taglinePx: number; taglineLH: number; panelY: number; monoPx: number; rows: InstallRow[]; wrapped: boolean; rowH: number; padX: number; lineY0: number; footerPx: number; footerY: number; caret: [number, number] };
   split: { words: Rect; ui: Rect; vertical: boolean; wordsPx: number };
   stage: Rect; band: Rect | null;
   uiFull: Rect;  // a product-UI ask's panel when it has no words beside it
@@ -84,7 +115,7 @@ const desk = (c: LayoutContent): LaunchLayout => {
     cam: { home: { c: [960, 540], z: 1 }, macroZ: 2.4, macroCreep: 0.25, macroX0: 330, macroY: 934, follow: true, leanZ: 1.18, pointerOff: [1780, 1140], pointerS: 1.35, pointerOn: [g.GEN.x + g.GEN.w / 2 + 18, g.GEN.y + g.GEN.h / 2 + 6] },
     bug: { x: W - 40, y: H - 34, px: 24 },
     type: { maxW: 1560, cap1: 190, capN: 130, minPx: MIN_PX.desk.type, cover: 1110 },
-    end: { cx: W / 2, titleY: 400, titleMax: 150, titleW: 1300, tagline: [c.tagline], taglineY: 520, taglinePx: 30, taglineLH: 40, panelY: py, monoPx: 30, rowH: 60, padX: 60, lineY0: py + 55, footerPx: 24, footerY: py + ph + 60, caret: [16, 34] },
+    end: { cx: W / 2, titleY: 400, titleMax: 150, titleW: 1300, tagline: [c.tagline], taglineY: 520, taglinePx: 30, taglineLH: 40, panelY: py, monoPx: 30, rows: c.install.map((text) => ({ text, indent: 0 })), wrapped: false, rowH: 60, padX: 60, lineY0: py + 55, footerPx: 24, footerY: py + ph + 60, caret: [16, 34] },
     // a two-column grid on the frame's centre line: words 40 %, a 100 px gutter, the live UI 46 %, equal margins
     split: { words: { x: 150, y: 150, w: 720, h: 780 }, ui: { x: 970, y: 120, w: 800, h: 840 }, vertical: false, wordsPx: 96 },
     stage: { x: 0, y: 0, w: W, h: H }, band: null,
@@ -117,9 +148,9 @@ const phone = (shape: Exclude<Shape, "16x9">, c: LayoutContent, H0: number, S: R
   const card = Math.round(Math.min(g.INPUT.w, viewBottom - top - 58 * k - 2 * bubbleLineH - 60 * k));
   const cardX = g.CHAT.x + (g.CHAT.w - card) / 2;
   // the end card, stacked and centred in E
-  const mono = Math.min(30 * k, ...c.install.map((s) => (Ew - 2 * 32 - 2 * 36) / (s.length * 0.61)));
+  const inst = installRows(c.install, Ew - 2 * 32 - 2 * 36, min.read, 30 * k), mono = inst.px;
   const taglinePx = Math.max(30 * k, min.read), tagline = wrapEst(c.tagline, taglinePx, Ew - 2 * m - 60), tLH = Math.round(taglinePx * 1.3);
-  const titleMax = 150 * k, rowH = Math.round(mono * 2), ph = rowH * c.install.length + 50 * k;
+  const titleMax = 150 * k, rowH = Math.round(mono * 2), ph = rowH * inst.rows.length + 50 * k;
   const block = titleMax + 60 + tagline.length * tLH + 60 + ph + 80, y0 = E.y0 + (Eh - block) / 2 - 20;
   const titleY = y0 + titleMax * 0.62, taglineY = y0 + titleMax + 60 + tLH / 2, panelY = taglineY + (tagline.length - 0.5) * tLH + 50;
   // the split beat, stacked: the words on top, the live UI under them. On 9x16 both sit in the window's
@@ -131,6 +162,8 @@ const phone = (shape: Exclude<Shape, "16x9">, c: LayoutContent, H0: number, S: R
     : { words: { x: 80, y: 90, w: W - 160, h: Math.round(H * 0.3) }, ui: { x: m + 20, y: Math.round(H * 0.3) + 130, w: W - 2 * m - 40, h: H - Math.round(H * 0.3) - 130 - 90 }, vertical: true, wordsPx: shape === "1x1" ? 76 : 84 };
   // a UI ask on its own: on 9x16 the window's rectangle less 6 %, the room its camera creeps into
   const uiFull = zones ? { x: Math.round(R.x + R.w * 0.03), y: Math.round(R.y + R.h * 0.03), w: Math.round(R.w * 0.94), h: Math.round(R.h * 0.94) } : { x: 40, y: Math.round(H * 0.1), w: W - 80, h: Math.round(H * 0.76) };
+  // a word page: its lines, and on 9x16 its bloom too, centred on the window's rectangle
+  const typeAt: P = [E.x0 + Ew / 2, R.y + R.h / 2];
   // the hook: the prompt big, the camera gliding after the caret (and down a line when the words wrap)
   const macroZ = { "1x1": 1.85, "4x5": 1.95, "9x16": 2.05 }[shape];
   return {
@@ -139,8 +172,8 @@ const phone = (shape: Exclude<Shape, "16x9">, c: LayoutContent, H0: number, S: R
     // on 9x16 the lean on a new card goes further: the card is smaller there, and the rest of the window fades as it leaves the safe area
     cam: { home: { c: [W / 2, H / 2], z: 1 }, macroZ, macroCreep: macroZ * 0.08, macroX0: W / 2 / macroZ - 60 * k, macroY: g.INPUT.y + g.INPUT.h / 2, follow: true, leanZ: zones ? 1.5 : 1.1, pointerOff: [W - 110, H + 70], pointerS: 1.35 * k, pointerOn: [g.GEN.x + g.GEN.w / 2 + 18 * k, g.GEN.y + g.GEN.h / 2 + 6 * k] },
     bug: { x: E.x1 - m - 10, y: E.y1 - bugStrip / 2 + bugPx * 0.1, px: bugPx },
-    type: { maxW: Ew - 2 * 90, cap1: 190, capN: 150, minPx: min.type, cover: Math.ceil(Math.hypot(W, H) / 2) + 9, ...(zones ? { at: [E.x0 + Ew / 2, R.y + R.h / 2] as P } : {}) },
-    end: { cx: E.x0 + Ew / 2, titleY, titleMax, titleW: Ew - 2 * m - 80, tagline, taglineY, taglinePx, taglineLH: tLH, panelY, monoPx: mono, rowH, padX: 36, lineY0: panelY + 25 * k + rowH / 2, footerPx: Math.max(24 * k, min.read), footerY: panelY + ph + 60, caret: [Math.round(mono * 0.53), Math.round(mono * 1.13)] },
+    type: { maxW: Ew - 2 * 90, cap1: 190, capN: 150, minPx: min.type, cover: zones ? Math.ceil(Math.max(...[[0, 0], [W, 0], [0, H], [W, H]].map(([x, y]) => Math.hypot(x - typeAt[0], y - typeAt[1])))) + 9 : Math.ceil(Math.hypot(W, H) / 2) + 9, ...(zones ? { at: typeAt } : {}) }, // cover: the bloom's reach to the farthest corner from where it opens
+    end: { cx: E.x0 + Ew / 2, titleY, titleMax, titleW: Ew - 2 * m - 80, tagline, taglineY, taglinePx, taglineLH: tLH, panelY, monoPx: mono, rows: inst.rows, wrapped: inst.wrapped, rowH, padX: 36, lineY0: panelY + 25 * k + rowH / 2, footerPx: Math.max(24 * k, min.read), footerY: panelY + ph + 60, caret: [Math.round(mono * 0.53), Math.round(mono * 1.13)] },
     split, stage: { x: 0, y: 0, w: W, h: H }, band: null, uiFull, safe: S, zones,
     roles: [],
   };

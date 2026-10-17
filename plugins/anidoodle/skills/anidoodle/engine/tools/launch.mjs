@@ -26,7 +26,7 @@ import { resolve } from "node:path";
 import { knownFilms, requireFilm, SHAPE_NAMES } from "./names.mjs";
 import { filmMeta, loadFilm, writeCaptions } from "./captions.mjs";
 import { checkFacts, claimsOf } from "./factsrules.mjs";
-import { initFacts, readFacts } from "./facts.mjs";
+import { factsFile, initFacts, readFacts } from "./facts.mjs";
 
 const [cmd, name, ...rest] = process.argv.slice(2);
 const arg = (k, d) => { const i = rest.indexOf(`--${k}`); return i >= 0 ? rest[i + 1] : d; };
@@ -115,7 +115,7 @@ const quiet = (args) => { const r = spawnSync(process.execPath, args, { encoding
 mkdirSync(resolve("out"), { recursive: true });
 const zoneMode = arg("zones", "fail"); if (!["fail", "warn"].includes(zoneMode)) die(`--zones is fail or warn, got '${zoneMode}'\nusage: ${USAGE}`);
 const rows = [];
-const fx = readFacts(resolve("facts.json")), factsRes = fx.error ? { status: "FAIL", checked: 0, problems: [{ claim: "(facts.json)", why: fx.error }] } : checkFacts(claimsOf(await loadFilm(film)), fx.facts);
+const fx = readFacts(factsFile(film)), factsRes = fx.error ? { status: "FAIL", checked: 0, problems: [{ claim: "(facts.json)", why: fx.error }] } : checkFacts(claimsOf(await loadFilm(film)), fx.facts);
 console.log(`\nFACTS ${film}: ${factsRes.status}${factsRes.status === "N/A" ? `   ${factsRes.reason}` : `   ${factsRes.checked} claim(s)`}`);
 for (const p of factsRes.problems) console.log(`  FAIL  "${p.claim.slice(0, 60)}" ${p.why}`);
 for (const sh of shapes) {

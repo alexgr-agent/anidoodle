@@ -29,7 +29,8 @@ research ledger (`explainer.md`) made general, and the launch film's list of app
 
 `where` is `on-screen` or `narration`. `launch.mjs new <name>` writes an empty one beside the
 project and never overwrites one that is there; `node tools/facts.mjs init` does the same for
-any project.
+any project. A film with a ledger of its own in `facts/<film>.json` is checked against that one
+instead (the shipped examples keep theirs there, so they never seed your `facts.json`).
 
 ## The check
 

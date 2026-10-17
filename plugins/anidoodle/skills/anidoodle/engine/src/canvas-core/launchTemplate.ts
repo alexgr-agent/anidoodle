@@ -28,7 +28,7 @@ import {
   C, SANS, MONO, camLerp, caretAt, charTimes, clamp, drawChatFrame, expo, inOut, inkCard, inkDrop,
   lerp, lerpP, out3, plateLayer, pointer, press, ramp, rr, spring, toScreen, typedAt, useCam, type Cam, type Drop, type ChatGeom, type Rect,
 } from "./launchKit";
-import { launchLayout, estWidth, wrapEst, SHAPES, type LaunchLayout, type Shape } from "./launchLayout";
+import { launchLayout, estWidth, installRows, wrapEst, SHAPES, type LaunchLayout, type Shape } from "./launchLayout";
 import { chatGeom } from "./launchKit";
 import { beatGrid, bloomFrame, bloomRadius, makeCut, pic, type, typeFrame, type Seg, type TypeLine } from "./launchCut";
 import { measure, writeOn, setType } from "./kinetic";
@@ -390,11 +390,12 @@ export const makeLaunchFilm = (spec: LaunchSpec): LaunchFilm => {
   const END_L = (() => {
     if (!clean) return L.end;
     // (9x16: measured on the safe rectangle's width and centred on its height)
-    const AW = ZONES ? SAFE.w - 24 : W, E = L.end, n = spec.install.length, tp = E.taglinePx * 1.5, tl = wrapEst(spec.tagline, tp, AW * (ZONES ? 0.9 : 0.8)), tLH = Math.round(tp * 1.3);
-    const mono = Math.min(E.monoPx * 1.35, ...spec.install.map((x) => (AW * 0.86 - 2 * E.padX) / (x.length * 0.61))), rowH = Math.round(mono * 2), ph = rowH * n + 50 * k;
+    const AW = ZONES ? SAFE.w - 24 : W, E = L.end, tp = E.taglinePx * 1.5, tl = wrapEst(spec.tagline, tp, AW * (ZONES ? 0.9 : 0.8)), tLH = Math.round(tp * 1.3);
+    const inst = installRows(spec.install, AW * 0.86 - 2 * E.padX, minPx, E.monoPx * 1.35), mono = inst.px, rowH = Math.round(mono * 2), ph = rowH * inst.rows.length + 50 * k;
+    if (mono < minPx - 1e-9) throw new Error(`launchTemplate ${shape}: the install lines would be ${mono.toFixed(1)} px on the clean end card (phone-safe minimum ${minPx} px). Shorten the install line, or ship this shape without it`);
     const g1 = titleSize * 0.42, g2 = tLH * 0.9, g3 = spec.footer ? 44 * k : 0, block = titleSize * 0.74 + g1 + tl.length * tLH + g2 + ph + g3 + (spec.footer ? E.footerPx : 0);
     const titleY = (ZONES ? SAFE.y * 2 + SAFE.h - block : H - block) / 2 + titleSize * 0.74, taglineY = titleY + g1 + tLH / 2, panelY = taglineY + (tl.length - 0.5) * tLH + g2;
-    return { ...E, titleY, tagline: tl, taglinePx: tp, taglineLH: tLH, taglineY, panelY, monoPx: mono, rowH, lineY0: panelY + 25 * k + rowH / 2, footerY: panelY + ph + g3 + E.footerPx / 2, caret: [Math.round(mono * 0.53), Math.round(mono * 1.13)] as [number, number] };
+    return { ...E, titleY, tagline: tl, taglinePx: tp, taglineLH: tLH, taglineY, panelY, monoPx: mono, rows: inst.rows, wrapped: inst.wrapped, rowH, lineY0: panelY + 25 * k + rowH / 2, footerY: panelY + ph + g3 + E.footerPx / 2, caret: [Math.round(mono * 0.53), Math.round(mono * 1.13)] as [number, number] };
   })();
   const titleW = clean ? estWidth(spec.title, titleSize) * 1.08 : measure(spec.title, titleSize);
   const dotR = titleSize * (clean ? 0.1 : 0.085), dotGap = titleSize * 0.1;
@@ -443,12 +444,16 @@ export const makeLaunchFilm = (spec: LaunchSpec): LaunchFilm => {
     c.globalAlpha = ramp(e, 34 + Q, 46 + Q); c.fillStyle = PAL.soft; c.font = SANS(500, E.taglinePx); E.tagline.forEach((t, j) => c.fillText(t, cx, E.taglineY + j * E.taglineLH + rise(34 + Q)));
     c.translate(0, rise(40 + Q));
     c.globalAlpha = ramp(e, 40 + Q, 52 + Q); c.font = MONO(E.monoPx);
-    const nI = spec.install.length, pw = Math.max(...spec.install.map((s) => c.measureText(s).width)) + 2 * E.padX, ph = E.rowH * nI + 2 * (E.lineY0 - E.panelY) - E.rowH, py = E.panelY;
+    // one row per install line, centred; a wrapped line's rows are set left in the panel, its continuation indented
+    const rows = E.rows, nI = rows.length, cw = c.measureText("0").width, rowW = (r: { text: string; indent: number }) => c.measureText(r.text).width + r.indent * cw;
+    const pw = (E.wrapped ? Math.max(...rows.map(rowW)) : Math.max(...spec.install.map((s) => c.measureText(s).width))) + 2 * E.padX, ph = E.rowH * nI + 2 * (E.lineY0 - E.panelY) - E.rowH, py = E.panelY, x0 = cx - pw / 2 + E.padX;
     c.fillStyle = clean ? PAL.ink : "#1f1c18"; rr(c, cx - pw / 2, py, pw, ph, 22 * L.k); c.fill();
-    c.fillStyle = clean ? "#ffffff" : "#ece4d6"; spec.install.forEach((s, j) => c.fillText(s, cx, E.lineY0 + j * E.rowH));
-    // a terminal caret blinks after the last line: the hold reads as live, never as a freeze
-    const lastW = c.measureText(spec.install[nI - 1]).width;
-    if (Math.floor((e - 40 - Q) / 15) % 2 === 0) { if (clean) c.fillStyle = THEME.accent; c.fillRect(cx + lastW / 2 + 8 * (E.monoPx / 30), E.lineY0 + (nI - 1) * E.rowH - E.caret[1] / 2, E.caret[0], E.caret[1]); }
+    c.fillStyle = clean ? "#ffffff" : "#ece4d6";
+    if (E.wrapped) { c.textAlign = "left"; rows.forEach((r, j) => c.fillText(r.text, x0 + r.indent * cw, E.lineY0 + j * E.rowH)); c.textAlign = "center"; }
+    else spec.install.forEach((s, j) => c.fillText(s, cx, E.lineY0 + j * E.rowH));
+    // a terminal caret blinks after the last row: the hold reads as live, never as a freeze
+    const lastW = c.measureText(rows[nI - 1].text).width, caretX = E.wrapped ? x0 + rowW(rows[nI - 1]) + 8 * (E.monoPx / 30) : cx + lastW / 2 + 8 * (E.monoPx / 30);
+    if (Math.floor((e - 40 - Q) / 15) % 2 === 0) { if (clean) c.fillStyle = THEME.accent; c.fillRect(caretX, E.lineY0 + (nI - 1) * E.rowH - E.caret[1] / 2, E.caret[0], E.caret[1]); }
     if (spec.footer) { c.fillStyle = PAL.soft; c.font = SANS(500, E.footerPx); c.fillText(spec.footer, cx, E.footerY); }
     c.globalAlpha = 1; c.textAlign = "left"; c.setTransform(env.scale, 0, 0, env.scale, 0, 0);
   };
@@ -479,11 +484,12 @@ export const makeLaunchFilm = (spec: LaunchSpec): LaunchFilm => {
     const size = Math.min(nL === 1 ? 220 : 170, ...lines.map((l) => (maxW / (estWidth(l.text, 100) * 1.12)) * 100)), gap = size * 1.12, y0 = (at ? at[1] : H / 2) - ((nL - 1) * gap) / 2 + size * 0.36;
     lines.forEach((l, i) => setType(c, env, l.text, x0, y0 + i * gap, size, ramp(local, 14 + TYPE_O.lead + i * CLEAN_ST, 14 + TYPE_O.lead + 18 + i * CLEAN_ST), { color: l.color === C.accent ? THEME.accent : l.color ?? PAL.ink, weight: 800 }));
     bug(c, env);
-  }, { W, H, ...bloomOpts, rim: 4, ink: THEME.accent, radius: TYPE_R });
+  }, { W, H, ...bloomOpts, rim: 4, ink: THEME.accent, radius: TYPE_R, ...(L.type.at ? { center: L.type.at } : {}) });
   // a word page's bloom is sized to the frame it covers (the desktop's 1250 px over a 1110 px cover):
   // on a smaller frame a fixed bloom would cover it before the words start, and two frames would match
   const TYPE_R = L.shape === "16x9" ? undefined : Math.round((1250 * L.type.cover) / 1110);
-  const TYPE_OPTS = L.shape === "16x9" ? TYPE_O : { ...TYPE_O, W, H, maxW: L.type.maxW, radius: TYPE_R, ...(L.type.at ? { text: L.type.at } : {}) };
+  // (9x16: the page blooms from the words' centre, so its first drop lands where the words will be)
+  const TYPE_OPTS = L.shape === "16x9" ? TYPE_O : { ...TYPE_O, W, H, maxW: L.type.maxW, radius: TYPE_R, ...(L.type.at ? { text: L.type.at, center: L.type.at } : {}) };
   const drawStage = (ctx: Ctx, env: Env, t: number) => {
     const { s, local } = cut.at(t), exact = Number.isInteger(t);
     if (s.kind === "pic") content(ctx, env, cut.contentOf(s, local), exact);
@@ -530,7 +536,7 @@ export const makeLaunchFilm = (spec: LaunchSpec): LaunchFilm => {
     if (s.kind !== "type") return;
     const written = 14 + TYPE_O.lead + 18 + (s.lines.length - 1) * (clean ? CLEAN_ST : TYPE_O.stagger) - (clean ? 9 : 2); // local frame the last line is done (set type's out-cubic settles to the pixel sooner)
     // last frame the page still fills the frame (a round iris only clips the corners for its first closing frames: still a still)
-    const cover = clean ? Math.hypot(W, H) / 2 * 0.9 : L.type.cover;
+    const cover = clean ? (L.type.at ? (L.type.cover - 9) * 0.9 : Math.hypot(W, H) / 2 * 0.9) : L.type.cover;
     let open = s.len - 1; while (open > written && bloomRadius(open + 2, s.len + 4, { radius: TYPE_R }) < cover) open--;
     holds.push([cut.STARTS[k] + written + 1, cut.STARTS[k] + open + 1]);
   });

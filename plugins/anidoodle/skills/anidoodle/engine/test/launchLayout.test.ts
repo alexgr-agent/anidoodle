@@ -2,7 +2,7 @@
 // chat, the cards, the word pages, the split beat, the end card), every line a viewer reads is at
 // least the phone-safe size, nothing sits over anything else, and 16x9 is the desktop film exactly.
 import { CHAT_GEOM, chatGeom, CHAT } from "../src/canvas-core/launchKit";
-import { launchLayout, SHAPES, MIN_PX, PHONE_SAFE, estWidth, monoWidth, parseShapes, type Shape } from "../src/canvas-core/launchLayout";
+import { launchLayout, SHAPES, MIN_PX, PHONE_SAFE, estWidth, installRows, monoWidth, parseShapes, type Shape } from "../src/canvas-core/launchLayout";
 import { makeLaunchFilm, fitWords } from "../src/canvas-core/launchTemplate";
 import type { Film } from "../src/canvas-core/film";
 
@@ -15,10 +15,8 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
   const g = chatGeom(CHAT, 1, CHAT_GEOM.px, 34, 0);
   ok(JSON.stringify([g.CHAT, g.INPUT, g.GEN, g.REPLY.x, g.REPLY.y, g.TEXT]) === JSON.stringify([CHAT_GEOM.CHAT, CHAT_GEOM.INPUT, CHAT_GEOM.GEN, CHAT_GEOM.REPLY.x, CHAT_GEOM.REPLY.y, CHAT_GEOM.TEXT]), "the chat derivation at k = 1 IS the desktop chat (one component, not two)");
   const content0 = { prompts: ["a lighthouse at sunset, as a print", "now a fox at dusk"], install: ["/plugin marketplace add alexgreensh/anidoodle", "/plugin install anidoodle@alexgreensh-anidoodle"], tagline: "Illustrations, loops and films, drawn in code" };
-  // anidoodle's own install lines (47 characters) cannot be 32 px mono inside 9x16's safe width, so 9x16 is laid out with shorter ones
-  const phoneContent = { ...content0, install: ["npm install your-product", "your-product init"] };
   for (const shape of Object.keys(SHAPES) as Shape[]) {
-    const content = shape === "9x16" ? phoneContent : content0;
+    const content = content0;
     const L = launchLayout(shape, content), frame = { x: 0, y: 0, w: L.W, h: L.H }, c = L.chat;
     ok(L.W === SHAPES[shape].W && L.H === SHAPES[shape].H, `${shape}: the frame is ${L.W}x${L.H}`);
     const small = L.roles.filter((r) => r.px < r.min);
@@ -28,7 +26,7 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
     ok(L.thread.cardX >= c.CHAT.x && L.thread.cardX + L.thread.card <= c.CHAT.x + c.CHAT.w && L.thread.card > 0, `${shape}: the answer card (${L.thread.card} px) sits inside the thread`);
     ok(L.thread.bubbles.every((ls) => ls.length <= 3), `${shape}: prompts wrap to at most 3 bubble lines (${L.thread.bubbles.map((b) => b.length).join(", ")})`);
     ok(L.bug.y > c.CHAT.y + c.CHAT.h, `${shape}: the corner mark sits below the chat window, never on it`);
-    const pw = Math.max(...content.install.map((s) => monoWidth(s, L.end.monoPx))) + 2 * L.end.padX;
+    const pw = Math.max(...L.end.rows.map((r) => monoWidth(r.text, L.end.monoPx) + r.indent * L.end.monoPx * 0.61)) + 2 * L.end.padX;
     ok(pw <= L.W, `${shape}: the install panel (${pw.toFixed(0)} px at ${L.end.monoPx.toFixed(1)} px mono) fits the frame's width`);
     ok(L.end.titleY < L.end.taglineY && L.end.taglineY < L.end.panelY && L.end.footerY < L.stage.h, `${shape}: the end card stacks title, line, panel, footer, all in frame`);
     ok(!overlap(L.split.words, L.split.ui) && inside(L.split.words, L.stage) && inside(L.split.ui, L.stage), `${shape}: a split beat's words and live UI have their own areas (${L.split.vertical ? "stacked" : "side by side"})`);
@@ -43,12 +41,24 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
     const bugW = estWidth("Your Product", L.bug.px) * 1.2;
     ok(inside({ x: L.bug.x - bugW, y: L.bug.y - L.bug.px, w: bugW, h: L.bug.px * 1.3 }, S), "9x16: the corner mark sits inside the safe rectangle");
     const at = L.type.at!; ok(!!at && inside({ x: at[0] - L.type.maxW / 2, y: at[1] - 10, w: L.type.maxW, h: 20 }, S), "9x16: a word page's lines are centred in the safe rectangle and no wider than it");
-    const pw0 = Math.max(...content.install.map((x) => monoWidth(x, E.monoPx))) + 2 * E.padX;
+    const pw0 = pw;
     ok(inside({ x: E.cx - Math.max(E.titleW, pw0) / 2, y: E.titleY - E.titleMax, w: Math.max(E.titleW, pw0), h: E.footerY + E.footerPx - (E.titleY - E.titleMax) }, S), "9x16: the end card (name, line, install panel, footer) sits inside the safe rectangle");
   }
   let err = ""; try { launchLayout("16x9", { ...content0, band: true }); } catch (e) { err = (e as Error).message; } ok(/sidecar/.test(err), "16x9 refuses a burned-in band: its captions ship as .srt/.vtt");
-  err = ""; try { launchLayout("9x16", content0); } catch (e) { err = (e as Error).message; } ok(/install lines would be .*Shorten the install line/.test(err), `9x16 refuses an install line too long for the safe width at 32 px: ${err.slice(0, 80)}`);
-  err = ""; try { launchLayout("9x16", { ...content0, install: ["npx some-very-long-package-name@latest init --with-every-flag-there-is"] }); } catch (e) { err = (e as Error).message; } ok(/install lines would be/.test(err), `an install line that cannot be phone-safe is an error: ${err.slice(0, 80)}`);
+  // install lines too long for the mono minimum wrap at a natural break, the continuation indented; short ones stay whole
+  const T = launchLayout("9x16", content0).end, rowsOf = (r: { text: string; indent: number }[]) => r.map((x) => `${" ".repeat(x.indent)}${x.text}`).join(" | ");
+  ok(T.wrapped && rowsOf(T.rows) === "/plugin marketplace add |   alexgreensh/anidoodle | /plugin install |   anidoodle@alexgreensh-anidoodle" && T.monoPx >= MIN_PX.phone.read, `9x16: anidoodle's own install lines wrap after the command word at ${T.monoPx.toFixed(1)} px: ${rowsOf(T.rows)}`);
+  const one = installRows(["npm install tally"], 824.8, 32, 41), mixed = installRows(["npm i tally", "/plugin install anidoodle@alexgreensh-anidoodle"], 824.8, 32, 41);
+  ok(!one.wrapped && one.rows.length === 1 && one.rows[0].text === "npm install tally" && one.rows[0].indent === 0, "a short install line stays on one row");
+  ok(mixed.wrapped && rowsOf(mixed.rows) === "npm i tally | /plugin install |   anidoodle@alexgreensh-anidoodle", `only the line that cannot fit wraps: ${rowsOf(mixed.rows)}`);
+  const at = installRows(["npx anidoodle-package@alexgreensh-anidoodle-latest"], 700, 32, 41);
+  ok(at.wrapped && rowsOf(at.rows) === "npx anidoodle-package |   @alexgreensh-anidoodle-latest", `two rows when one break gives two: before "@" when no space does (${rowsOf(at.rows)})`);
+  const mark = installRows(["alexgreensh-anidoodle@alexgreensh-anidoodle-x"], 600, 32, 41);
+  ok(mark.wrapped && rowsOf(mark.rows) === "alexgreensh-anidoodle |   @alexgreensh-anidoodle-x", `with no space it wraps before "@", the next row opening with it: ${rowsOf(mark.rows)}`);
+  const slash = installRows(["alexgreensh-anidoodle/alexgreensh-anidoodle-x"], 600, 32, 41);
+  ok(slash.wrapped && rowsOf(slash.rows) === "alexgreensh-anidoodle/ |   alexgreensh-anidoodle-x", `or after "/", the row closing with it: ${rowsOf(slash.rows)}`);
+  ok(JSON.stringify(installRows(["npm i a", "b init"], 944, 32, 33.6)) === JSON.stringify({ rows: [{ text: "npm i a", indent: 0 }, { text: "b init", indent: 0 }], px: 33.6, wrapped: false }), "lines that fit keep their size and rows exactly");
+  err = ""; try { launchLayout("9x16", { ...content0, install: ["npx a-single-package-name-that-is-far-too-long-for-any-phone-frame-at-all"] }); } catch (e) { err = (e as Error).message; } ok(/install lines would be/.test(err), `an install line that cannot be phone-safe is an error: ${err.slice(0, 80)}`);
   ok(parseShapes("16x9, 9x16").join() === "16x9,9x16", "parseShapes reads a --shapes list");
   err = ""; try { parseShapes("16x10"); } catch (e) { err = (e as Error).message; } ok(/not a shape/.test(err), "parseShapes refuses an unknown shape");
 

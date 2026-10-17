@@ -4,6 +4,10 @@
 import { checkFacts, entryProblems, normClaim, EMPTY_FACTS } from "../tools/factsrules.mjs";
 import { makeLaunchFilm } from "../src/canvas-core/launchTemplate";
 import type { Film } from "../src/canvas-core/film";
+import exampleLedger from "../facts/launchExample.json";
+import cleanLedger from "../facts/launchExampleClean.json";
+import { launchExample } from "../src/canvas-core/launchExample";
+import { launchExampleClean } from "../src/canvas-core/launchExampleClean";
 
 export const name = "facts";
 export const run = (ok: (cond: boolean, label: string) => void) => {
@@ -39,4 +43,9 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
   ok(film.claims.join("|") === "ONE.|TWO.|Counts things.|Fast.", `a launch film declares its words, tagline and extra claims once each (${film.claims.join("|")})`);
   ok(film.reshape("9x16").claims.join("|") === film.claims.join("|"), "the claims are the same in every shape");
   ok(!film.claims.includes("draw it") && !film.claims.includes("npm i tally"), "prompts and install lines are not claims");
+  // the shipped examples carry their own ledgers (facts/<film>.json), so launch.mjs ship passes for them
+  for (const [nm, f, ledger] of [["launchExample", launchExample, exampleLedger], ["launchExampleClean", launchExampleClean, cleanLedger]] as const) {
+    const r = checkFacts(f.claims, ledger);
+    ok(r.status === "PASS" && ledger.claims.every((e: { generated?: boolean }) => e.generated === true), `${nm}: its ${r.checked} claims are all in facts/${nm}.json, labelled generated (${r.problems.map((p: { why: string }) => p.why).join("; ") || "no problems"})`);
+  }
 };

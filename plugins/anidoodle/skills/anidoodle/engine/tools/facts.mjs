@@ -10,6 +10,7 @@
 //     { "claim": "IDEA IN. ART OUT.", "where": "on-screen", "generated": true, "note": "slogan written for this film, states no fact" } ] }
 //
 //   node tools/facts.mjs <film>[-<shape>] [--facts facts.json]   every claim the film declares is listed and well formed
+//                                    (default: facts/<film>.json if the film has its own, else facts.json)
 //   node tools/facts.mjs init [--facts facts.json]               write an empty facts.json (never overwrites)
 //
 // A film declares its claims as `film.claims` (a launch template film: the type-frame words, the split
@@ -25,11 +26,14 @@ import { resolve } from "node:path";
 import { isMain } from "./is-main.mjs";
 import { EMPTY_FACTS, checkFacts, claimsOf } from "./factsrules.mjs";
 
+// A film's ledger: facts/<film>.json when it has one of its own (the shipped examples do, so they never
+// seed a user's facts.json), else the project's facts.json.
+export const factsFile = (film) => { const own = resolve("facts", `${String(film ?? "").replace(/-(16x9|1x1|4x5|9x16)$/, "")}.json`); return existsSync(own) ? own : resolve("facts.json"); };
 export const readFacts = (file) => { if (!existsSync(file)) return { facts: null }; try { return { facts: JSON.parse(readFileSync(file, "utf8")) }; } catch (e) { return { facts: null, error: `${file} is not valid JSON: ${e.message}` }; } };
 export const initFacts = (file) => { if (existsSync(file)) return false; writeFileSync(file, JSON.stringify(EMPTY_FACTS, null, 2) + "\n"); return true; };
 
 if (isMain(import.meta.url)) {
-  const argv = process.argv.slice(2), fi = argv.indexOf("--facts"), file = resolve(fi >= 0 ? argv[fi + 1] : "facts.json"), name = argv.find((a, i) => !a.startsWith("--") && argv[i - 1] !== "--facts");
+  const argv = process.argv.slice(2), fi = argv.indexOf("--facts"), name = argv.find((a, i) => !a.startsWith("--") && argv[i - 1] !== "--facts"), file = fi >= 0 ? resolve(argv[fi + 1]) : name === "init" ? resolve("facts.json") : factsFile(name);
   const USAGE = "node tools/facts.mjs <film>[-<shape>] [--facts facts.json]\n       node tools/facts.mjs init [--facts facts.json]";
   if (name === "init") { console.log(initFacts(file) ? `facts: wrote ${file}` : `facts: ${file} already exists; left as it is`); process.exit(0); }
   const { requireFilm } = await import("./names.mjs"), { loadFilm } = await import("./captions.mjs");
