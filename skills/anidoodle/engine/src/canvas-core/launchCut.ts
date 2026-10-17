@@ -84,12 +84,12 @@ export const bloomFrame = (ctx: Ctx, env: Env, local: number, len: number, under
 // `bug` draws a corner brand mark on the page (the logo recurs on every frame of the film).
 // `lead`: when the first line starts, relative to the bloom being open (default -2); `stagger`: frames
 // between lines (default 20); a line takes 18 frames to write.
-export type TypeOpts = BloomOpts & { maxW?: number; lead?: number; stagger?: number };
+export type TypeOpts = BloomOpts & { maxW?: number; lead?: number; stagger?: number; text?: P }; // text: the words' centre (default the frame's)
 export const typeFrame = (ctx: Ctx, env: Env, lines: TypeLine[], local: number, len: number, under: (first: boolean) => void, bug?: (c: Ctx) => void, o: TypeOpts = {}) => {
   const IN = o.inF ?? 14, W = o.W ?? 1920, H = o.H ?? 1080, maxW = o.maxW ?? 1560, lead = o.lead ?? -2, st = o.stagger ?? 20;
   bloomFrame(ctx, env, local, len, under, (c) => {
-    const n = lines.length, size = Math.min(n === 1 ? 190 : 130, ...lines.map((l) => (maxW / measure(l.text, 100)) * 100)), gap = size * 1.45, y0 = H / 2 - ((n - 1) * gap) / 2 + size * 0.5;
-    lines.forEach((l, i) => writeOn(c, env, l.text, W / 2, y0 + i * gap, size, ramp(local, IN + lead + i * st, IN + lead + 18 + i * st), l.style, { color: l.color, align: "center", seed: 7 + i }));
+    const n = lines.length, size = Math.min(n === 1 ? 190 : 130, ...lines.map((l) => (maxW / measure(l.text, 100)) * 100)), gap = size * 1.45, y0 = (o.text ? o.text[1] : H / 2) - ((n - 1) * gap) / 2 + size * 0.5;
+    lines.forEach((l, i) => writeOn(c, env, l.text, o.text ? o.text[0] : W / 2, y0 + i * gap, size, ramp(local, IN + lead + i * st, IN + lead + 18 + i * st), l.style, { color: l.color, align: "center", seed: 7 + i }));
     bug?.(c);
   }, o);
 };

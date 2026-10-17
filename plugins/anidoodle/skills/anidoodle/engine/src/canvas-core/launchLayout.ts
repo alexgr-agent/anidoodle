@@ -13,6 +13,7 @@
 //   L.split             a feature beat: the words' column and the live UI's, which never overlap
 //   L.stage / L.band    the picture's area and, with captions burned in, the captions' own band
 //   L.roles             every text role and its size, which launchLayout checks against minPx
+//   L.safe / L.zones    where text may sit: on 9x16 inside the platforms' safe zones (PHONE_SAFE), else the frame
 import { CHAT_GEOM, chatGeom, type ChatGeom, type Rect } from "./launchKit";
 import type { Cam } from "./launchKit";
 import type { P } from "./core";
@@ -31,6 +32,16 @@ export const parseShapes = (s: string): Shape[] => {
   if (bad.length || !out.length) throw new Error(`shapes: '${bad.join(", ") || s}' is not a shape; use ${Object.keys(SHAPES).join(", ")}`);
   return out as Shape[];
 };
+// The 9:16 platform safe zones: Reels, TikTok and Shorts lay their own interface over the top band, the
+// bottom band and a right-hand column of buttons. Shares of the frame: top and bottom of its height,
+// right of its width. tools/textrules.mjs checks rendered frames against the same numbers (a unit test
+// holds the two equal). They apply to 9x16 only; the feed shapes have no such overlay.
+export const PHONE_SAFE = { top: 0.14, bottom: 0.25, right: 0.14 } as const;
+/** The rectangle a W x H frame leaves free of the platforms' interface (the whole frame for a shape the zones do not apply to). */
+export const safeRect = (shape: Shape, W: number, H: number): Rect => shape === "9x16" ? { x: 0, y: H * PHONE_SAFE.top, w: W * (1 - PHONE_SAFE.right), h: H * (1 - PHONE_SAFE.top - PHONE_SAFE.bottom) } : { x: 0, y: 0, w: W, h: H };
+// on 9x16 the layout keeps this far inside a zone's line (a zone's edge is not a visible edge, so the gap is small)
+const ZONE_GAP = 8;
+
 // phone-safe minimums, px at the delivered size: `read` = a line the viewer must read (a prompt, a
 // label, the words, the install lines); `chrome` = the UI around them (a header, a button's word)
 export const MIN_PX = { phone: { read: 32, chrome: 24, type: 64 }, desk: { read: 18, chrome: 16, type: 80 } };
@@ -54,10 +65,12 @@ export type LaunchLayout = {
   thread: { top: number; viewBottom: number; clip: [number, number, number, number]; bubbleH: number; bubbleLineH: number; bubblePad: number; bubbleR: number; bubbleMaxW: number; bubbleRad: number; gap: number; card: number; cardX: number; cardDy: number; bubbles: string[][] };
   cam: { home: Cam; macroZ: number; macroCreep: number; macroX0: number; macroY: number; follow: boolean; leanZ: number; pointerOff: P; pointerS: number; pointerOn: P };
   bug: { x: number; y: number; px: number };
-  type: { maxW: number; cap1: number; capN: number; minPx: number; cover: number };
+  type: { maxW: number; cap1: number; capN: number; minPx: number; cover: number; at?: P }; // at: the words' centre when it is not the frame's
   end: { cx: number; titleY: number; titleMax: number; titleW: number; tagline: string[]; taglineY: number; taglinePx: number; taglineLH: number; panelY: number; monoPx: number; rowH: number; padX: number; lineY0: number; footerPx: number; footerY: number; caret: [number, number] };
   split: { words: Rect; ui: Rect; vertical: boolean; wordsPx: number };
   stage: Rect; band: Rect | null;
+  uiFull: Rect;  // a product-UI ask's panel when it has no words beside it
+  safe: Rect; zones: boolean;
   roles: Role[];
 };
 export type LayoutContent = { prompts: string[]; install: string[]; tagline: string; title?: string; band?: boolean };
@@ -75,17 +88,25 @@ const desk = (c: LayoutContent): LaunchLayout => {
     // a two-column grid on the frame's centre line: words 40 %, a 100 px gutter, the live UI 46 %, equal margins
     split: { words: { x: 150, y: 150, w: 720, h: 780 }, ui: { x: 970, y: 120, w: 800, h: 840 }, vertical: false, wordsPx: 96 },
     stage: { x: 0, y: 0, w: W, h: H }, band: null,
+    uiFull: { x: 250, y: 90, w: 1420, h: 880 }, safe: { x: 0, y: 0, w: W, h: H }, zones: false,
     roles: [],
   };
 };
 
-// the phone compositions: one column, the chat as tall as the frame allows, type sizes floored at the phone minimums
-const phone = (shape: Exclude<Shape, "16x9">, c: LayoutContent, H0: number): LaunchLayout => {
-  const W = 1080, H = H0, m = 40, k = { "1x1": 1.12, "4x5": 1.22, "9x16": 1.36 }[shape], min = MIN_PX.phone;
+// the phone compositions: one column, the chat as tall as the frame allows, type sizes floored at the phone minimums.
+// Each is composed inside E, the edges it treats as its frame: the frame itself for 1x1 and 4x5; on 9x16
+// the safe rectangle S, so every line a viewer reads stays clear of the platforms' interface (the picture's
+// background still fills the whole frame). E sits `m - ZONE_GAP` outside a zone's line, so the margins
+// leave ZONE_GAP against a zone and the full margin m against the frame's own left edge.
+const phone = (shape: Exclude<Shape, "16x9">, c: LayoutContent, H0: number, S: Rect): LaunchLayout => {
+  // (9x16 composes inside its safe rectangle, about a 4x5 frame's worth of room, so it takes 4x5's scale)
+  const W = 1080, H = H0, m = 40, k = { "1x1": 1.12, "4x5": 1.22, "9x16": 1.22 }[shape], min = MIN_PX.phone, zones = shape === "9x16";
+  const E = zones ? { x0: 0, y0: S.y - (m - ZONE_GAP), x1: S.x + S.w + (m - ZONE_GAP), y1: Math.min(S.y + S.h, H) } : { x0: 0, y0: 0, x1: W, y1: H };
+  const Ew = E.x1 - E.x0, Eh = E.y1 - E.y0;
   const px = { head: Math.max(22 * k, min.chrome), sub: Math.max(18 * k, min.chrome), bubble: Math.max(26 * k, min.read), label: Math.max(20 * k, min.read), gen: Math.max(24 * k, min.chrome) };
   // the window stops above the corner mark's own strip: the mark never sits on the UI
   const bugPx = Math.max(24 * k, min.chrome), bugStrip = Math.round(bugPx + 34);
-  const promptPx = Math.max(34 * k, min.read), chatR = { x: m, y: m, w: W - 2 * m, h: H - m - bugStrip, r: 34 * k };
+  const promptPx = Math.max(34 * k, min.read), chatR = { x: E.x0 + m, y: E.y0 + m, w: Ew - 2 * m, h: Eh - m - bugStrip, r: 34 * k };
   // the composer holds the longest prompt; the button sits on its last line
   const base = chatGeom(chatR, k, px, promptPx, 1), textW = base.GEN.x - 20 * k - base.TEXT.x;
   const lines = Math.min(3, Math.max(1, ...c.prompts.map((p) => wrapEst(p, promptPx, textW).length)));
@@ -95,31 +116,40 @@ const phone = (shape: Exclude<Shape, "16x9">, c: LayoutContent, H0: number): Lau
   // the answer card: as wide as the thread allows, and short enough that a card and the prompt above it both fit the view
   const card = Math.round(Math.min(g.INPUT.w, viewBottom - top - 58 * k - 2 * bubbleLineH - 60 * k));
   const cardX = g.CHAT.x + (g.CHAT.w - card) / 2;
-  // the end card, stacked and centred in the frame
-  const mono = Math.min(30 * k, ...c.install.map((s) => (W - 2 * 32 - 2 * 36) / (s.length * 0.61)));
-  const taglinePx = Math.max(30 * k, min.read), tagline = wrapEst(c.tagline, taglinePx, W - 2 * m - 60), tLH = Math.round(taglinePx * 1.3);
+  // the end card, stacked and centred in E
+  const mono = Math.min(30 * k, ...c.install.map((s) => (Ew - 2 * 32 - 2 * 36) / (s.length * 0.61)));
+  const taglinePx = Math.max(30 * k, min.read), tagline = wrapEst(c.tagline, taglinePx, Ew - 2 * m - 60), tLH = Math.round(taglinePx * 1.3);
   const titleMax = 150 * k, rowH = Math.round(mono * 2), ph = rowH * c.install.length + 50 * k;
-  const block = titleMax + 60 + tagline.length * tLH + 60 + ph + 80, y0 = (H - block) / 2 - 20;
+  const block = titleMax + 60 + tagline.length * tLH + 60 + ph + 80, y0 = E.y0 + (Eh - block) / 2 - 20;
   const titleY = y0 + titleMax * 0.62, taglineY = y0 + titleMax + 60 + tLH / 2, panelY = taglineY + (tagline.length - 0.5) * tLH + 50;
-  const split = shape === "9x16"
-    ? { words: { x: 90, y: 150, w: W - 180, h: 520 }, ui: { x: m + 20, y: 720, w: W - 2 * m - 40, h: H - 720 - 150 }, vertical: true, wordsPx: 96 }
+  // the split beat, stacked: the words on top, the live UI under them. On 9x16 both sit in the window's
+  // rectangle, and the UI is inset so its push (12 % at most) never carries its text past that rectangle.
+  const PUSH = 1.12, R = { x: chatR.x, y: chatR.y, w: chatR.w, h: chatR.h };
+  const wordsH = Math.round(R.h * 0.32), uiTop = R.y + wordsH + 30, uiW = Math.floor(R.w / PUSH), uiH = Math.floor((R.y + R.h - uiTop) / PUSH);
+  const split = zones
+    ? { words: { x: R.x + 20, y: R.y + 10, w: R.w - 40, h: wordsH }, ui: { x: Math.round(R.x + (R.w - uiW) / 2), y: Math.round(uiTop + (R.y + R.h - uiTop - uiH) / 2), w: uiW, h: uiH }, vertical: true, wordsPx: 96 }
     : { words: { x: 80, y: 90, w: W - 160, h: Math.round(H * 0.3) }, ui: { x: m + 20, y: Math.round(H * 0.3) + 130, w: W - 2 * m - 40, h: H - Math.round(H * 0.3) - 130 - 90 }, vertical: true, wordsPx: shape === "1x1" ? 76 : 84 };
+  // a UI ask on its own: on 9x16 the window's rectangle less 6 %, the room its camera creeps into
+  const uiFull = zones ? { x: Math.round(R.x + R.w * 0.03), y: Math.round(R.y + R.h * 0.03), w: Math.round(R.w * 0.94), h: Math.round(R.h * 0.94) } : { x: 40, y: Math.round(H * 0.1), w: W - 80, h: Math.round(H * 0.76) };
   // the hook: the prompt big, the camera gliding after the caret (and down a line when the words wrap)
   const macroZ = { "1x1": 1.85, "4x5": 1.95, "9x16": 2.05 }[shape];
   return {
     shape, W, H, k, phone: true, chat: g,
     thread: { top, viewBottom, clip: [g.CHAT.x, g.CHAT.y + 102 * k, g.CHAT.w, viewBottom - (g.CHAT.y + 102 * k)], bubbleH: 58 * k + (px.bubble - 26 * k) * 1.2, bubbleLineH, bubblePad: 26 * k, bubbleR: g.INPUT.x + g.INPUT.w, bubbleMaxW, bubbleRad: 22 * k, gap: 26 * k, card, cardX, cardDy: 34 * k + (px.label - 20 * k), bubbles },
-    cam: { home: { c: [W / 2, H / 2], z: 1 }, macroZ, macroCreep: macroZ * 0.08, macroX0: W / 2 / macroZ - 60 * k, macroY: g.INPUT.y + g.INPUT.h / 2, follow: true, leanZ: 1.1, pointerOff: [W - 110, H + 70], pointerS: 1.35 * k, pointerOn: [g.GEN.x + g.GEN.w / 2 + 18 * k, g.GEN.y + g.GEN.h / 2 + 6 * k] },
-    bug: { x: W - m - 10, y: H - bugStrip / 2 + bugPx * 0.1, px: bugPx },
-    type: { maxW: W - 2 * 90, cap1: 190, capN: 150, minPx: min.type, cover: Math.ceil(Math.hypot(W, H) / 2) + 9 },
-    end: { cx: W / 2, titleY, titleMax, titleW: W - 2 * m - 80, tagline, taglineY, taglinePx, taglineLH: tLH, panelY, monoPx: mono, rowH, padX: 36, lineY0: panelY + 25 * k + rowH / 2, footerPx: Math.max(24 * k, min.read), footerY: panelY + ph + 60, caret: [Math.round(mono * 0.53), Math.round(mono * 1.13)] },
-    split, stage: { x: 0, y: 0, w: W, h: H }, band: null,
+    // on 9x16 the lean on a new card goes further: the card is smaller there, and the rest of the window fades as it leaves the safe area
+    cam: { home: { c: [W / 2, H / 2], z: 1 }, macroZ, macroCreep: macroZ * 0.08, macroX0: W / 2 / macroZ - 60 * k, macroY: g.INPUT.y + g.INPUT.h / 2, follow: true, leanZ: zones ? 1.5 : 1.1, pointerOff: [W - 110, H + 70], pointerS: 1.35 * k, pointerOn: [g.GEN.x + g.GEN.w / 2 + 18 * k, g.GEN.y + g.GEN.h / 2 + 6 * k] },
+    bug: { x: E.x1 - m - 10, y: E.y1 - bugStrip / 2 + bugPx * 0.1, px: bugPx },
+    type: { maxW: Ew - 2 * 90, cap1: 190, capN: 150, minPx: min.type, cover: Math.ceil(Math.hypot(W, H) / 2) + 9, ...(zones ? { at: [E.x0 + Ew / 2, R.y + R.h / 2] as P } : {}) },
+    end: { cx: E.x0 + Ew / 2, titleY, titleMax, titleW: Ew - 2 * m - 80, tagline, taglineY, taglinePx, taglineLH: tLH, panelY, monoPx: mono, rowH, padX: 36, lineY0: panelY + 25 * k + rowH / 2, footerPx: Math.max(24 * k, min.read), footerY: panelY + ph + 60, caret: [Math.round(mono * 0.53), Math.round(mono * 1.13)] },
+    split, stage: { x: 0, y: 0, w: W, h: H }, band: null, uiFull, safe: S, zones,
     roles: [],
   };
 };
 
 // the caption band, when captions are burned in: its own strip under the picture, never over it.
 // The layout is composed for the picture's area (the stage), and the band is drawn below it.
+// On 9x16 the band sits at the bottom of the safe rectangle (captions are text a viewer reads), and the
+// strip under it, in the platforms' bottom zone, is the picture's background.
 const BAND = { "16x9": 0, "1x1": 150, "4x5": 170, "9x16": 230 };
 
 /** The layout of a launch film in `shape`, for this content. Throws when a line a viewer must read cannot be phone-safe. */
@@ -128,8 +158,9 @@ export const launchLayout = (shape: Shape, c: LayoutContent): LaunchLayout => {
   const { W, H } = SHAPES[shape], band = c.band ? BAND[shape] : 0;
   if (c.band && shape === "16x9") throw new Error("launchLayout 16x9: burned-in captions are for the phone shapes (1x1, 4x5, 9x16); a 16x9 film ships its captions as a .srt/.vtt sidecar");
   // (a wide frame plays where sidecar captions work, YouTube, LinkedIn, the site: its captions ship as .srt/.vtt)
-  const L = shape === "16x9" ? desk(c) : phone(shape, c, H - band);
-  L.H = H; L.stage = { x: 0, y: 0, w: W, h: H - band }; L.band = band ? { x: 0, y: H - band, w: W, h: band } : null;
+  const S = safeRect(shape, W, H), bandY = !band ? H : shape === "9x16" ? S.y + S.h - band : H - band;
+  const L = shape === "16x9" ? desk(c) : phone(shape, c, bandY, S);
+  L.H = H; L.stage = { x: 0, y: 0, w: W, h: bandY }; L.band = band ? { x: 0, y: bandY, w: W, h: band } : null;
   const min = L.phone ? MIN_PX.phone : MIN_PX.desk, g = L.chat;
   L.roles = [
     { role: "prompt", px: g.TEXT.px, min: min.read }, { role: "bubble", px: g.px.bubble, min: min.read }, { role: "card label", px: g.px.label, min: min.read },

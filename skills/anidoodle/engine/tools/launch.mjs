@@ -7,7 +7,7 @@
 //       It renders as it is (placeholder plates and UI), so the pipeline can be proved before the art.
 //
 //   node tools/launch.mjs ship <name> [--shapes 16x9,1x1,4x5,9x16] [--blur auto] [--shutter 180]
-//                                     [--poster-frame N] [--gate] [--strict-zones]
+//                                     [--poster-frame N] [--gate] [--zones warn]
 //       for each shape, from ONE timeline (launchLayout re-composes it, never a crop):
 //         1 render   out/<name>-<shape>.mp4 (render.mjs; --blur/--shutter/--poster-frame pass through)
 //         2 poster   out/<name>-<shape>.poster.png, the film's own legible frame (meta.poster: the end card)
@@ -16,7 +16,7 @@
 //                    marker, the true peak after the encode, a legible frame 0
 //         5 frame    framecheck.mjs: no text and no card or window cut by the frame's edge, every frame;
 //                    each text cue up for max(0.7 s, 0.3 s per word) (N/A without cues); on 9:16 no text in
-//                    the platforms' top, bottom or right-hand zones (FLAG only; --strict-zones makes it fail)
+//                    the platforms' top, bottom or right-hand zones (it fails the shape; --zones warn only flags it)
 //         6 gate     with --gate: gate.mjs (determinism, contract, dead air) on the rendered file
 //       and once for the film, before the shapes: facts.mjs, every claim it makes is listed in facts.json
 //       with its source (a film that makes no claims is N/A). Then one table. Exit 1 if anything fails.
@@ -31,7 +31,7 @@ import { initFacts, readFacts } from "./facts.mjs";
 const [cmd, name, ...rest] = process.argv.slice(2);
 const arg = (k, d) => { const i = rest.indexOf(`--${k}`); return i >= 0 ? rest[i + 1] : d; };
 const die = (m) => { console.error(`launch: ${m}`); process.exit(2); };
-const USAGE = "node tools/launch.mjs new <name> [--preset drawn|clean]\n       node tools/launch.mjs ship <name> [--shapes 16x9,1x1,4x5,9x16] [--blur auto] [--shutter 180] [--poster-frame N] [--gate] [--strict-zones]";
+const USAGE = "node tools/launch.mjs new <name> [--preset drawn|clean]\n       node tools/launch.mjs ship <name> [--shapes 16x9,1x1,4x5,9x16] [--blur auto] [--shutter 180] [--poster-frame N] [--gate] [--zones warn]";
 
 const DRAWN = (n) => `// ${n}: a launch film on the template (references/workflows/launch-video-kit.md).
 // Fill every TODO from the sourced brief (references/workflows/launch-video.md, "Ground it in the real
@@ -113,7 +113,8 @@ const pass = ["blur", "shutter", "poster-frame", "blur-max", "blur-px"].flatMap(
 const node = (args) => spawnSync(process.execPath, args, { stdio: "inherit" }).status === 0;
 const quiet = (args) => { const r = spawnSync(process.execPath, args, { encoding: "utf8", maxBuffer: 1 << 26 }); return { ok: r.status === 0, out: (r.stdout ?? "") + (r.stderr ?? "") }; };
 mkdirSync(resolve("out"), { recursive: true });
-const rows = [], zoneMode = rest.includes("--strict-zones") ? "fail" : "warn";
+const zoneMode = arg("zones", "fail"); if (!["fail", "warn"].includes(zoneMode)) die(`--zones is fail or warn, got '${zoneMode}'\nusage: ${USAGE}`);
+const rows = [];
 const fx = readFacts(resolve("facts.json")), factsRes = fx.error ? { status: "FAIL", checked: 0, problems: [{ claim: "(facts.json)", why: fx.error }] } : checkFacts(claimsOf(await loadFilm(film)), fx.facts);
 console.log(`\nFACTS ${film}: ${factsRes.status}${factsRes.status === "N/A" ? `   ${factsRes.reason}` : `   ${factsRes.checked} claim(s)`}`);
 for (const p of factsRes.problems) console.log(`  FAIL  "${p.claim.slice(0, 60)}" ${p.why}`);

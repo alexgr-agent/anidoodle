@@ -144,10 +144,11 @@ into place), round iris seams, the product's own UI. Pick one per film; never mi
 - **Shapes**: `16x9` for YouTube and the site, `1x1` or `4x5` for feeds, `9x16` for Reels and
   Shorts. Re-compose per shape from one timeline; never crop a wide render. The template does it
   through `launchLayout.ts` (`launch.mjs ship <film> --shapes 16x9,1x1,9x16`), with phone-safe type:
-  every line a viewer reads at least 32 px at 1080 across on the phone shapes.
+  every line a viewer reads at least 32 px at 1080 across on the phone shapes, and on 9x16 inside the
+  platforms' safe zones (`formats.md`).
 - **Captions**: feeds autoplay muted. Ship `.srt`/`.vtt` for players that take a sidecar (YouTube,
   LinkedIn, the site); burn them into their OWN band under the picture for feeds that do not
-  (`captions: "burn"`), never over the art.
+  (`captions: "burn"`), never over the art; on 9x16 the band sits at the bottom of the safe zones.
 - **Sync and peak are checked on the file you ship**, not the master: the sound at every sync
   marker within 1 ms of the mix, the true peak at or under -1 dBTP after the AAC encode
   (`verify-export --delivery`).

@@ -97,10 +97,11 @@ Words on screen, wherever the shape:
   of the height, and the right 14 % of the width (the button column) between them. The shares are
   the cautious end of the creator safe-area guidance those apps publish for vertical video,
   rounded up; their layouts change, so re-check before a campaign. `framecheck.mjs` finds text in
-  those zones on any 9:16 frame (`SAFE-ZONES`); on `launch.mjs ship` it is a FLAG that does not
-  fail the shape, because the launch template's phone layouts are a chat window across the whole
-  frame; `--strict-zones` makes it fail. Other shapes report N/A. Burned-in captions
-  (`captions: "burn"`) sit in the bottom zone by design: for those feeds, ship the sidecar.
+  those zones on any 9:16 frame (`SAFE-ZONES`) and `launch.mjs ship` fails the shape for it
+  (`--zones warn` only flags it). The launch template composes its 9:16 layout inside the safe
+  rectangle: the chat, the words, the split beat, the end card and the corner mark, with burned-in
+  captions (`captions: "burn"`) in a band at the safe rectangle's bottom. The background still fills
+  the frame. Other shapes report N/A.
 - **Claims** in a film, on screen or spoken, are listed with their sources in `facts.json`
   (`workflows/facts.md`).
 

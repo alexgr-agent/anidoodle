@@ -35,8 +35,8 @@ contact sheet of EVERY shape against this list, and fix, never waive:
 - **Time to read.** Each text up at least `max(0.7 s, 0.3 s per word)`, and never over a busy picture
   without a plate (`craft-bar.md`). `framecheck.mjs` fails a declared cue held too briefly.
 - **Phone safe zones on 9:16.** No text in the top 14 %, the bottom 25 % or the right 14 % of the
-  frame, where the platforms put their own interface (`formats.md`). `ship` flags it per shape;
-  `--strict-zones` fails it.
+  frame, where the platforms put their own interface (`formats.md`). `ship` fails the shape for it;
+  `--zones warn` only flags it. The template's 9:16 layout already keeps every line inside.
 - **Every claim sourced.** The words, the tagline and any extra `claims` in the spec are listed in
   `facts.json` with their source sentence and URL or file (`workflows/facts.md`); `ship` checks it.
 - **No edge-cropped content.** A card, a product window, a film's card sits whole in the frame

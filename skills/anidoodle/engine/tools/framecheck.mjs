@@ -8,9 +8,8 @@
 //      button column the platforms cover with their own interface. Other shapes report N/A.
 // The rules and their numbers are textrules.mjs.
 //   node tools/framecheck.mjs <film>[-<shape>] [--every 1] [--from F] [--to T] [--zones fail|warn]
-// --zones warn lists safe-zone text as FLAG and does not fail the run (launch.mjs ship uses it, because
-// the launch template's phone layouts are a chat window across the whole frame; --strict-zones there
-// makes it fail). Reading time and the edge cut always fail.
+// --zones warn lists safe-zone text as FLAG and does not fail the run (launch.mjs ship passes it on with
+// its own --zones warn; by default safe-zone text fails). Reading time and the edge cut always fail.
 import { resolve } from "node:path";
 import { buildPage } from "./build-page.mjs";
 import { detect } from "./detect.mjs";

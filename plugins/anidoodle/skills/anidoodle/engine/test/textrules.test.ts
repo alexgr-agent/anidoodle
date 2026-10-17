@@ -2,9 +2,12 @@
 // including the failing cases: a cue that is too short, text under the platforms' buttons.
 // @ts-ignore: a plain ES module shared with the tools
 import { SAFE_ZONES, isPortrait916, readingNeed, readingTime, safeZoneHits, zoneRects } from "../tools/textrules.mjs";
+import { PHONE_SAFE } from "../src/canvas-core/launchLayout";
 
 export const name = "textrules";
 export const run = (ok: (cond: boolean, label: string) => void) => {
+  // one set of numbers: the layout composes inside PHONE_SAFE, framecheck checks against SAFE_ZONES
+  ok(JSON.stringify(SAFE_ZONES) === JSON.stringify(PHONE_SAFE), `the checked safe zones are the ones the launch layout composes for (${JSON.stringify(SAFE_ZONES)})`);
   // ---- reading time: max(0.7 s, 0.3 s per word)
   ok(readingNeed("Hi") === 0.7 && readingNeed("one two") === 0.7, "one or two words need the 0.7 s floor");
   ok(Math.abs(readingNeed("one two three four five six") - 1.8) < 1e-9, "six words need 1.8 s (0.3 s each)");
