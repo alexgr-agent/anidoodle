@@ -38,13 +38,44 @@ const GAP = 14; // px of "pen lift" between strokes: the nib travels, nothing is
 const glyphOf = (ch: string): Glyph => G[ch.toUpperCase()] ?? G[ch] ?? G["-"];
 const densify = (pts: P[], step: number): P[] => { const out: P[] = [pts[0]]; for (let i = 1; i < pts.length; i++) { const a = pts[i - 1], b = pts[i], n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step)); for (let k = 1; k <= n; k++) out.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]); } return out; };
 const cum = (pts: P[]) => { const l = [0]; for (let i = 1; i < pts.length; i++) l.push(l[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])); return l; };
-export const measure = (text: string, size: number, o: WriteOpts = {}) => { const s = size / 6, tr = o.track ?? 1.5; return [...text].reduce((a, ch) => a + ((glyphOf(ch).w ?? 4) + tr) * s, 0) - tr * s + 6 * (o.slant ?? 0.12) * s; }; // + the slant's overhang at the cap line
+// Optical spacing. Letters are spaced by their ink, not their boxes: between two letters the mean gap
+// across the cap height is the same (the track plus AIR, room for the nib's weight), so an open side
+// (C, the arms of T, the slopes of A) no longer leaves a hole and a narrow letter (I) no longer floats.
+// A side's hollow counts at most CAP units deep, and ink never comes closer than MIN_GAP to its
+// neighbour's. A space, or a mark with no ink, keeps its box.
+export const SPACING = { BANDS: 12, CAP: 1, MIN_GAP: 1.25, AIR: 0.8 };
+const { BANDS, CAP, MIN_GAP, AIR } = SPACING;
+type Profile = { L: number[]; R: number[]; ink: boolean[]; mL: number; mR: number } | null;
+const profiles = new Map<string, Profile>();
+export const profileOf = (ch: string): Profile => {
+  const key = ch.toUpperCase() in G ? ch.toUpperCase() : ch in G ? ch : "-";
+  let pr = profiles.get(key);
+  if (pr !== undefined) return pr;
+  const gl = glyphOf(ch), pts = [...(gl.l ?? []).map((st) => densify(st, 0.05)), ...(gl.c ?? []).map((st) => densify(sample(st, false, 10), 0.05))].flat();
+  if (!pts.length) { profiles.set(key, null); return null; }
+  const L = Array(BANDS).fill(Infinity), R = Array(BANDS).fill(-Infinity);
+  for (const [x, y] of pts) { const b = Math.max(0, Math.min(BANDS - 1, Math.floor((y / 6) * BANDS))); L[b] = Math.min(L[b], x); R[b] = Math.max(R[b], x); }
+  const ink = L.map((v) => v < Infinity), lo = Math.min(...L.filter((_, i) => ink[i])), hi = Math.max(...R.filter((_, i) => ink[i]));
+  const cl = L.map((v, i) => (ink[i] ? Math.min(v, lo + CAP) : lo + CAP)), cr = R.map((v, i) => (ink[i] ? Math.max(v, hi - CAP) : hi - CAP));
+  pr = { L, R, ink, mL: cl.reduce((a, v) => a + v, 0) / BANDS, mR: cr.reduce((a, v) => a + v, 0) / BANDS };
+  profiles.set(key, pr); return pr;
+};
+/** How far the next letter's origin sits from this one's, in glyph units. */
+export const advance = (a: string, b: string, tr: number) => {
+  const pa = profileOf(a), pb = profileOf(b);
+  if (!pa || !pb) return (glyphOf(a).w ?? 4) + tr;
+  let o = tr + AIR + pa.mR - pb.mL;
+  for (let i = 0; i < BANDS; i++) if (pa.ink[i] && pb.ink[i]) o = Math.max(o, pa.R[i] - pb.L[i] + MIN_GAP);
+  return o;
+};
+export const measure = (text: string, size: number, o: WriteOpts = {}) => { const s = size / 6, tr = o.track ?? 1.5, cs = [...text]; return (cs.reduce((a, ch, i) => a + (i < cs.length - 1 ? advance(ch, cs[i + 1], tr) : glyphOf(ch).w ?? 4), 0) + 6 * (o.slant ?? 0.12)) * s; }; // + the slant's overhang at the cap line
 const layout = (env: Env, text: string, x: number, y: number, size: number, o: WriteOpts): Layout => {
   const key = `kin:${text}|${x}|${y}|${size}|${o.align}|${o.slant}|${o.track}|${o.seed}`; const hit = env.cache.get(key) as Layout | undefined; if (hit) return hit;
   const s = size / 6, tr = o.track ?? 1.5, sl = o.slant ?? 0.12, r = rng((o.seed ?? 1) * 977 + 3), W = measure(text, size, o);
   let cx = o.align === "center" ? x - W / 2 : o.align === "right" ? x - W : x;
   const strokes: KStroke[] = [], boxes: Layout["boxes"] = [];
-  [...text].forEach((ch) => {
+  const cs = [...text];
+  cs.forEach((ch, ci) => {
     const gl = glyphOf(ch), gw = (gl.w ?? 4) * s, dy = (r() - 0.5) * size * 0.06, rot = (r() - 0.5) * 0.07, k = 1 + (r() - 0.5) * 0.06, gc: P = [cx + gw / 2, y - size / 2 + dy];
     // glyph units -> screen: scale, the forward slant, a per-letter tilt and baseline wander about its centre
     const T = ([px, py]: P): P => { const X = cx + (px + (6 - py) * sl) * s * k, Y = y - size + dy + py * s * k, ax = X - gc[0], ay = Y - gc[1]; return [gc[0] + ax * Math.cos(rot) - ay * Math.sin(rot), gc[1] + ax * Math.sin(rot) + ay * Math.cos(rot)]; };
@@ -53,7 +84,7 @@ const layout = (env: Env, text: string, x: number, y: number, size: number, o: W
     (gl.c ?? []).forEach((st) => { const pts = densify(sample(st, false, 10).map(T), 2); strokes.push({ pts, len: cum(pts), L: 0, glyph: boxes.length }); });
     strokes.slice(first).forEach((k2) => (k2.L = k2.len[k2.len.length - 1]));
     boxes.push({ c: gc, w: gw, firstS: first, lastS: strokes.length - 1 });
-    cx += gw + tr * s;
+    if (ci < cs.length - 1) cx += advance(ch, cs[ci + 1], tr) * s;
   });
   const total = strokes.reduce((a, k2) => a + k2.L + GAP, 0);
   const L: Layout = { strokes, boxes, W, total }; env.cache.set(key, L); return L;
