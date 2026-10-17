@@ -28,8 +28,8 @@ A long film is a sequence of chapters, each with its own small arc, joined by on
    in `references/motion-grammar.md`.
 5. **Music follows the chapters**: one theme, varied per chapter mood (see
    `references/music/`), with the transitions scored (pre-lap, pivot chord, texture handoff).
-6. **Review per chapter, then once whole**: a contact sheet per chapter at one tile per beat,
-   then the whole film once, with sound and without.
+6. **Review per chapter, then whole, by a fresh critic** (`workflows/review.md`): each chapter
+   after it is built, then the whole film, with sound and without. Three rounds at most each.
 
 ## Rendering long work
 

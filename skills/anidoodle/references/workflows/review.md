@@ -1,36 +1,86 @@
-# The review: four readings, one list, one gate
+# The review: a fresh critic, three rounds at most
 
-`working-method.md` says to review the whole film once, from the rendered file. This is how that
-one review is run. It does not add rounds: four readings of the same frozen file, one ranked fix
-list, one rebuild, one check that each fix landed.
+The builder never judges its own work. A builder who has watched the film forty times sees what
+they meant, forgives the hand they know is hard, and grades the effort. So every review is done by
+a **fresh critic**: a new subagent (or a new session) that has seen none of the building.
 
-The reason for four readings is that one reader looks for one kind of fault. Someone checking
-for a popped frame does not notice that the film has no point, and someone following the story
-forgives a hand with six fingers. Each reading below has one job, its own evidence and the
-dimensions it scores. Do them in this order, and finish one before starting the next.
+Reviews happen three times: after the **storyboard**, after **each scene** (a chapter, for a long
+film), and after each **full render**. The loop is the same each time.
 
-Freeze a copy of the file and note its hash first. Every reading is of that copy.
+## The loop
+
+1. **Freeze.** Copy the file under review and note its hash. The critic judges that copy, even if
+   the builder is already re-rendering.
+2. **Brief the critic.** Give it the frozen file (for a storyboard, the rows), the story in three
+   sentences, the shapes and sound the film promised, and this page. Give it none of the build:
+   no conclusions, no chat history, no list of what you think is wrong.
+3. **The critic reports** (below). It returns ranked problems with timestamps and a verdict.
+4. **Fix the biggest problem first.** Then the next, if they share a rebuild. Re-render.
+5. **A NEW critic rechecks.** Not the one who found the problems; it would see only what it expects.
+   Give the new critic the earlier list and the new file, and have it read the new file cold first.
+6. **Stop at the verdict "ship", or after round 3.** Open-ended loops never converge: a fourth round
+   finds new taste, not new faults. After round 3, report what remains, honestly, in the ledger
+   and to the person ("two P2 left: the brush wipe is used twice, the tail rings 0.4 s long").
+
+## What the critic does
+
+**Pulls its own frames.** It does not use the builder's stills. From the frozen file:
+
+```bash
+ffmpeg -i film.mp4 -vf "fps=5,scale=540:-1" frames/f-%04d.png          # a frame every 0.2 s
+ffmpeg -ss 11.6 -t 1.2 -i film.mp4 -vf "fps=15,scale=540:-1" seam/s-%03d.png   # denser around a cut
+```
+
+Every cut, wipe, camera move and reveal gets the denser pass, about half a second either side, at
+15 fps or at every frame for a very fast move. The cuts come from the file itself (`popscan.mjs`
+prints where frames jump, `meta.shots` and the cue table list the seams). Detail crops are taken
+at `--scale 2` from `still.mjs`, as in the illustrator reading.
+
+**Reads a silent contact sheet and retells the story.** Sound off, 2 frames a second:
+
+```bash
+ffmpeg -i film.mp4 -an -vf "fps=2,scale=360:-1,tile=6x5" sheet-%02d.png
+```
+
+Before it reads the brief, the critic writes what the film is about, who the characters are, what
+changes and what the last frame says, in plain words. Then it compares that with the brief. Where
+the retelling differs, the picture is at fault, never the viewer. This is the sound-off read.
+
+**Returns ranked problems, ending with a verdict.** Each problem has a timestamp (seconds and
+frame), what is wrong, the cause it can see, and a severity (below). Biggest first. The last line is
+exactly `ship` or `one more pass`. `ship` means no P0 or P1 is open on this file; the gate below
+still applies.
+
+**Says what works first**, so it survives the fixes.
 
 ## The four readings
 
+The critic runs these four readings, in this order, on the frozen file. Each has one job, its own
+evidence and its own scores; one reader looks for one kind of fault.
+
 | Reading | Looks at | What it settles | Scores |
 |---|---|---|---|
-| **Director** | the contact sheet at one tile per beat, sound off; then each seam as a before/after pair | Whether someone who has never seen the brief could say what the film is about, and feel the payoff. | point, first second, pacing, seams |
+| **Director** | the silent contact sheet and the retelling; then each seam as a before/after pair | Whether someone who has never seen the brief could say what the film is about, and feel the payoff. | point, first second, pacing, seams |
 | **Illustrator** | full-size stills of the hardest frames; crops of faces, hands, feet and joins at `--scale 2` | Whether a proud illustrator would sign it, or it is shapes assembled (`craft-bar.md`). | drawing, style |
-| **Motion and finish** | `popscan.mjs`, `gate.mjs`, strips of consecutive frames across every seam and every fast move | Whether anything pops, stalls, jumps or smears that was not meant to. | motion, finish |
+| **Motion and finish** | `popscan.mjs`, `gate.mjs`, the dense strips across every seam and every fast move | Whether anything pops, stalls, jumps or smears that was not meant to. | motion, finish |
 | **Sound and sync** | `music.mjs check` (with its ARC line), `verify-export.mjs`, `soundcheck.mjs` and its `soundsheet.mjs` picture, the cue table against the picture | Whether the sound is one piece with a shape, and lands on the picture. | sound |
+
+For a storyboard only the Director reading applies, on the rows: the story, the point, the pacing on
+the grid, the words. For a scene, Director, Illustrator and Motion on the scene's range
+(`render.mjs --from F --to T`, silent); the Sound reading waits for the full render.
+
+Also for the critic, on any film with words or claims: `framecheck.mjs` (no clipped text, each text
+cue up for `max(0.7 s, 0.3 s per word)`, nothing in the phone zones on 9:16, `craft-bar.md`) and
+`facts.mjs` (every claim listed with its source, `facts.md`). Their findings go on the list.
 
 Rules that make a reading worth having:
 
 - **Evidence before opinion.** Every finding names a frame (or a second, for sound) and a cause.
   "The run feels slow" is an impression; "the ground travels 22 px a frame at 400 while her
   stride covers 60" is a finding.
-- **Say what works first**, so it survives the fixes.
 - **A picture that does not read is fixed in the picture.** Never by adding a caption.
 - **The sound reading cannot hear.** Its findings are measurements; say so, and a human listens
   before the film ships.
-- **A fresh reader is worth more than a second pass by the builder.** When a reading is handed
-  to someone else, give them the file and the brief, never your own conclusions.
 
 ## Severity
 
@@ -42,15 +92,15 @@ Rules that make a reading worth having:
 
 ## The check before fixing
 
-Before anything is changed, every P0 and P1 is looked at once more, at full size, by someone
+Before anything is changed, the builder looks at the biggest P0 and P1 once more, at full size,
 trying to prove it wrong: it must be on the frame named, be what the finding says, and be
-something a viewer would see. Some first-pass findings do not survive this, and each one that is "fixed" anyway
-costs a rebuild and risks something that worked. What survives goes on the list, ranked by how
-much the film gains for the time the fix takes.
+something a viewer would see. Some critic findings do not survive this, and each one that is
+"fixed" anyway costs a rebuild and risks something that worked. What survives goes on the list,
+ranked by how much the film gains for the time the fix takes.
 
 ## The scorecard
 
-Score each line 1 to 5. The descriptions are for 1, 3 and 5. Where two readings disagree, the
+The critic scores each line 1 to 5. The descriptions are for 1, 3 and 5. Where two readings disagree, the
 lower score stands. A line with an open P0 cannot score above 3.
 
 | | 1 | 3 | 5 |
@@ -72,14 +122,36 @@ A silent piece leaves Sound out. A still is scored on Point, Drawing, Style and 
 The film ships when all of these hold:
 
 - every line is 3 or more, Finish is 5, and the average is 4 or more;
-- no P0 is open;
+- no P0 is open (a P0 still open after round 3 is a blocker the person is told about, never shipped quietly);
 - `gate.mjs` and `verify-export.mjs` pass, and for a scored film `music.mjs check` passes and a
-  human has listened.
+  human has listened;
+- the last critic's verdict is `ship`, or three rounds are used and what remains is in the ledger.
 
-After the rebuild, go down the fix list item by item against the new file and mark each one
-**fixed**, **partly** or **still there**, with the frame looked at. Nothing is marked fixed from
-the code alone.
+After the rebuild, the new critic goes down the earlier list item by item against the new file and
+marks each one **fixed**, **partly** or **still there**, with the frame looked at. Nothing is
+marked fixed from the code alone, and never by the builder who made the fix.
 
 Then say the scores to the person who asked, in plain words, with the one or two things you
 would still change. "This is a 4 on Seams, because the brush wipe is used three times" is worth
 more to them than "done".
+
+## The fix ledger
+
+Each round adds one block to `ledger.md` in the project, written from the critic's list and the
+rebuild. The problem, the fix and the evidence, before and after, in numbers where a tool gives
+them and in the frame looked at where it does not. A fix without a before and after is a hope.
+
+```md
+## Round 2 · critic 2 · file 9f3c1a (md5 of the render) · verdict: one more pass
+
+| # | Problem (time) | Fix | Before | After | Status |
+|---|---|---|---|---|---|
+| 1 | The wipe at 8.4 s jumps (P1) | start the wipe on the bar line, ease in and out | popscan: 41 px jump at frame 252 | 3 px at frame 252 | fixed, strip 249-256 looked at |
+| 2 | "ART OUT." is up 0.5 s (P1) | hold the page 12 frames longer | framecheck: needs 0.7 s, up 0.5 s | up 0.8 s | fixed |
+| 3 | The fox's back foot slides (P2) | plant it for the stride | not measured | not measured | still there, left for the next round |
+
+Open after this round: row 3. Rounds used: 2 of 3.
+```
+
+After round 3, or at `ship`, the last block ends with **Left open**, each remaining problem with
+its severity and why it was not fixed. That list goes to the person in plain words, with the scores.
