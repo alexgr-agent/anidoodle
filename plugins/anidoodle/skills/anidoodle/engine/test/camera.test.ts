@@ -1,6 +1,6 @@
 // CAMERA TESTS. The engine camera (src/canvas-core/camera.ts) is pure arithmetic, so it is held to
 // exact numbers here, with no browser: node tools/test.mjs
-import { Camera, EASE, monoPath, planeScale, projectCam, strokeWeight, unprojectCam, type Cam } from "../src/canvas-core/camera";
+import { Camera, dollyZoom, EASE, heroScale, monoPath, planeScale, projectCam, strokeWeight, unprojectCam, type Cam } from "../src/canvas-core/camera";
 import { Gfx, type P } from "../src/canvas-core/core";
 
 export const name = "camera";
@@ -67,7 +67,36 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
   g.push(10, 20, 2, 0.3); g.push(5, 0, 1, 0); const T1 = T; g.pop(); g.pop();
   ok(near(T1[4], 10 + 2 * Math.cos(0.3) * 5) && near(T1[5], 20 + 2 * Math.sin(0.3) * 5), "nested push: child translation is rotated and scaled by the parent");
 
-  // 8. bad input is refused, loudly
+  // 8. lens zoom is not a dolly: the lens scales every plane by one factor, the dolly changes parallax
+  const base: Cam = { look: [0, 0], zoom: 1.5 }, lensed: Cam = { ...base, lens: 2 }, dollied: Cam = { look: [0, 0], zoom: 3 };
+  ok(near(heroScale(lensed), 3) && near(heroScale(dollied), 3) && near(heroScale(base), 1.5), "hero-plane scale is dolly x lens (a lens of 2 and a dolly to 3 frame the hero the same)");
+  ok([0.5, 1, 3, -0.2].every((z) => near(planeScale(lensed, z) / planeScale(base, z), 2)), "a lens zoom grows every depth by the same factor: the depth relationships do not change");
+  ok(planeScale(dollied, 3) / planeScale(dollied, 0) < planeScale(base, 3) / planeScale(base, 0), "a dolly in to the same hero size shrinks the far plane relative to the hero: parallax changes");
+  ok(near(strokeWeight(lensed), Math.pow(3, 0.35)), "stroke weight follows the screen scale, lens included");
+  const lc = new Camera([540, 540], [{ f: 0, look: [0, 0], zoom: 1 }, { f: 60, lens: 1 }, { f: 120, lens: 4 }]);
+  ok(near(lc.at(90).lens!, 2) && near(lc.at(90).zoom, 1) && near(lc.at(0).lens!, 1), "lens keys ease in log2 like the dolly (midpoint of 1 -> 4 is 2) and hold before their first key");
+  ok(JSON.stringify(Object.keys(cam.at(45))) === JSON.stringify(["look", "zoom"]), "a camera that never sets a lens answers exactly as before (no lens field)");
+  lc.shake({ from: 0, to: 30, amp: 10, seed: 3 });
+  let lensErr = 0, lensTrip = 0, shakePx = 0;
+  for (const f of [5, 70, 100]) for (const z of [0, 1.5, -0.25]) {
+    lc.begin(g, f, z); const [a, b, c, d, e, ff] = T; lc.end(g);
+    for (const q of [[0, 0], [300, -120]] as P[]) { const s = lc.toScreen(q, f, z), m = [a * q[0] + c * q[1] + e, b * q[0] + d * q[1] + ff]; lensErr = Math.max(lensErr, Math.hypot(s[0] - m[0], s[1] - m[1])); const w = lc.toWorld(s, f, z); lensTrip = Math.max(lensTrip, Math.hypot(w[0] - q[0], w[1] - q[1])); }
+  }
+  { const sh = lc.shaken(5), cl = lc.at(5), [dx, dy] = lc.shakeAt(5); shakePx = Math.hypot((cl.look[0] - sh.look[0]) * heroScale(sh) - dx, (cl.look[1] - sh.look[1]) * heroScale(sh) - dy); }
+  ok(lensErr < 1e-6 && lensTrip < 1e-6, "with a lens, begin() and toScreen() still agree and toWorld inverts them");
+  ok(shakePx < 1e-9 && lc.shaken(70).lens !== undefined, "shake stays in screen px under a lens, and the shaken camera keeps its lens");
+
+  // 9. the dolly zoom: the hero plane holds its size while the depth stretches
+  const dolly = new Camera([540, 540], [{ f: 0, look: [0, 0], zoom: 1 }, { f: 60, zoom: 3 }]), vz = dollyZoom((f) => dolly.at(f));
+  ok([0, 15, 30, 45, 60].every((f) => near(heroScale(vz(f)), 1, 1e-12)), "dollyZoom holds the hero plane's screen scale on every frame");
+  ok(planeScale(vz(60), 2) < planeScale(vz(0), 2) * 0.6, `dollying in, the far plane falls away behind the subject (${planeScale(vz(0), 2).toFixed(3)} -> ${planeScale(vz(60), 2).toFixed(3)})`);
+  const out = new Camera([540, 540], [{ f: 0, look: [0, 0], zoom: 2 }, { f: 60, zoom: 0.8 }]), vo = dollyZoom((f) => out.at(f), { at: 0 });
+  ok(near(heroScale(vo(60)), 2) && planeScale(vo(60), 2) > planeScale(vo(0), 2), "dollying out, the hero holds and the background looms");
+  ok(near(heroScale(dollyZoom((f) => dolly.at(f), { hold: 2.5 })(30)), 2.5), "hold sets the size to keep");
+  const asPath = new Camera([540, 540], [], { path: vz });
+  ok(near(heroScale(asPath.shaken(40)), 1) && asPath.toScreen([0, 0], 40)[0] === 540, "a dolly zoom drives a Camera as a path, with shake and projections intact");
+
+  // 10. bad input is refused, loudly
   const throws = (fn: () => unknown) => { try { fn(); return false; } catch { return true; } };
   ok(throws(() => new Camera([0, 0], [{ f: 5, zoom: 1 }, { f: 5, zoom: 2 }])), "rejects duplicate key frames");
   ok(throws(() => new Camera([0, 0], [{ f: 1.5, zoom: 1 }])), "rejects a fractional key frame");
@@ -75,4 +104,6 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
   ok(throws(() => new Camera([0, 0], [])), "rejects a camera with neither keys nor path");
   ok(throws(() => cam.shake({ from: 10, to: 10, amp: 1, seed: 1 })), "rejects an empty shake window");
   ok(throws(() => monoPath([[0, 1], [0, 2]])), "monoPath rejects non-increasing keys");
+  ok(throws(() => new Camera([0, 0], [{ f: 0, zoom: 1, lens: 0 }])) && throws(() => new Camera([0, 0], [{ f: 0, zoom: 1, lens: NaN }])) && throws(() => new Camera([0, 0], [{ f: 0, zoom: NaN }])), "rejects a lens <= 0, or a lens or zoom that is not a number");
+  ok(throws(() => dollyZoom((f) => dolly.at(f), { hold: 0 })) && throws(() => dollyZoom(() => ({ look: [0, 0], zoom: 0 }))), "dollyZoom refuses a size of 0 to hold, or a dolly at zoom 0");
 };

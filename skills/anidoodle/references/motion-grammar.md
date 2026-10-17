@@ -178,6 +178,29 @@ A card is a prompt, never an order. Keep it, adapt it to this film's subject and
 it, and say which in the brief. The default at the top of this page still holds: a card whose
 "not when" applies is dropped, and the gentle move takes its place.
 
+## Names people use
+
+People ask for moves by the names they know: a whip pan, a mask reveal, a Vertigo shot, a J-cut.
+`node tools/deck.mjs find "<name>"` routes the words to the card that builds it, to an engine call
+that is not a card (an iris, a lens zoom, a typewriter), or to a refusal. Every card carries those
+names in its `aka`. Run it before building anything named, so a word never turns into an
+improvised effect; the card's numbers are the default unless the person gave their own
+(`workflows/start-here.md`, When they name a move).
+
+## Names we refuse
+
+Some names ask for an effect that breaks the contract or the craft bar. Say so in one line and
+offer the alternative; `deck.mjs find` prints the same reason.
+
+| Name | Why not | Make instead |
+|---|---|---|
+| glitch | colour split and torn pixels need `ctx.filter` or pixel tricks the contract forbids | a cut on the beat, or one shake on a real impact |
+| light sweep | a shine sliding over chrome that nothing in the picture casts | `reveal-by-light`: the light belongs to the world |
+| fade-in | marks are made, not faded; the first tell on the craft bar | drawn on, revealed from behind, or written |
+| particle burst | decoration with no force behind it, never a default | `emph-contact`: dust or splash born on a real contact |
+| cross dissolve | two copies of one thing, each half there, read as a ghost | one object moving and changing mid-trip; the gentle move |
+| lens flare | lens faults painted onto a drawing read as stock overlays | one named light in the scene, or `reveal-by-light` |
+
 ## Callouts and the label handoff
 
 `engine/src/canvas-core/callout.ts` names one thing in the picture: a dot lands on it, a leader

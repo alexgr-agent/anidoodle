@@ -32,6 +32,19 @@ pick", pick, say what you picked and why in one line, and carry on.
 
 Stop asking the moment you can build. Two questions answered well beat six asked.
 
+## When they name a move
+
+When the person names a move ("a whip pan to the cat", "a slow-mo at the top of the jump"), look
+the name up first: `node <skill>/engine/tools/deck.mjs find "<name>"` returns the card or engine
+call that builds it, or the reason anidoodle refuses it and what it makes instead. Then record
+the move in the brief in four parts: **name** (theirs, and the card id), **duration** (seconds),
+**strength** (how far, how fast or how much: a distance as a share of the frame width, a speed,
+an overshoot) and **what moves** (which element, camera or layer). Fill only what they said. For
+every part they left open, the card's own numbers are the default, written down and marked as
+defaults: "whip pan (cam-whip-to-rest) · 0.4 to 0.7 s, card default · peak under the speed
+ceiling, card default · the camera, onto the cat, theirs". A vague ask becomes a spec someone can
+check against the render.
+
 ## Defaults when they do not say
 
 | Open question | Default | Why |
@@ -45,7 +58,8 @@ Stop asking the moment you can build. Two questions answered well beat six asked
 ## Write it down before you draw
 
 One short brief file in the project: kind, style (and why), shape(s), length, sound (style +
-moods), characters, the one-sentence idea. Everything the person said goes in their words.
+moods), characters, the one-sentence idea, and any named moves as name, duration, strength and
+what moves (card defaults marked as such). Everything the person said goes in their words.
 Everything you decided is marked as yours so they can veto it in one line.
 
 ## Before the first full render

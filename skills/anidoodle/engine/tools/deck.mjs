@@ -7,6 +7,7 @@
 //   node tools/deck.mjs deal --kind story --energy high --seconds 27 [--seed 7] [--avoid id,id] [--json]
 //   node tools/deck.mjs deal --cat seam --n 3 --kind launch       # three seams only
 //   node tools/deck.mjs list [--cat camera]                        # every card, one line each
+//   node tools/deck.mjs find "whip pan" [--json]                   # an everyday name -> its card, engine call, or why we refuse it
 //   node tools/deck.mjs test                                       # the deck and the dealer hold their own rules
 // Weights: role (workhorse 3, accent 2, signature 1) x energy fit (same 1, "any" 0.7, other 0.25).
 // A deal has one opening, one close, at most one signature card, and no card twice.
@@ -39,6 +40,35 @@ export const deal = ({ kind, energy, seconds = 20, seed = 1, n, cat, avoid = [] 
   return picked.sort((a, b) => CATS.indexOf(a.cat) - CATS.indexOf(b.cat));
 };
 
+// FIND. People ask for a move by the name they know ("a whip pan", "do the Vertigo thing"). Each card's
+// aka, the deck's calls and its refused names hold those names; find routes the words to what anidoodle
+// builds, or to the reason it will not and what it makes instead, so nothing is improvised from a word.
+const STOP = new Set(["a", "an", "the", "please", "do", "make", "me", "some", "use", "add", "like", "effect", "shot", "move", "thing"]);
+export const norm = (x) => ` ${String(x).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
+const entries = () => [
+  ...DECK.moves.map((m) => ({ kind: "card", id: m.id, names: [m.id, ...(m.aka ?? [])], item: m })),
+  ...(DECK.calls ?? []).map((c) => ({ kind: "call", id: c.id, names: [c.id, ...c.aka], item: c })),
+  ...(DECK.refused ?? []).map((r) => ({ kind: "refused", id: r.name, names: [r.name, ...r.aka], item: r })),
+];
+/** Every entry whose names match the words, best first: an exact name, a name inside the words, the words inside a name, then shared words. */
+export const find = (query) => {
+  const q = norm(query), words = q.trim().split(" ").filter((w) => w && !STOP.has(w)), out = [];
+  if (!q.trim()) return out;
+  for (const e of entries()) {
+    let best = 0, via = "";
+    for (const n of e.names) {
+      const a = norm(n), aw = a.trim().split(" ");
+      const score = a === q ? 100 : q.includes(a) ? 50 + aw.length : a.includes(q) ? 30 : words.length ? (10 * words.filter((w) => aw.includes(w)).length) / words.length : 0;
+      if (score > best) { best = score; via = n; }
+    }
+    if (best >= 5) out.push({ kind: e.kind, id: e.id, score: best, via, item: e.item });
+  }
+  return out.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+};
+const showFound = (r) => r.kind === "card" ? `${card(r.item)}\n    (matched "${r.via}")`
+  : r.kind === "call" ? `  ${r.id}   [engine call · ${r.item.where}]\n    ${r.item.call}\n    ${r.item.use}\n    (matched "${r.via}")`
+  : `  REFUSED: ${r.id}   (matched "${r.via}")\n    why: ${r.item.why}\n    make instead: ${r.item.instead}`;
+
 const card = (m) => `  ${m.id}   [${m.cat} · ${m.role} · ${m.energy}]\n    ${m.move}\n    build: ${m.build}\n    not when: ${m.not}`;
 const selfTest = () => {
   let fails = 0; const say = (ok, label) => { if (!ok) fails++; console.log(`  ${ok ? "PASS" : "FAIL"}  ${label}`); };
@@ -50,9 +80,26 @@ const selfTest = () => {
   // every file a card cites exists: a card that points at nothing is a rumour
   const have = new Set(); const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { if (e.name === "node_modules" || e.name.startsWith(".")) continue; if (e.isDirectory()) walk(join(d, e.name)); else have.add(e.name); } };
   walk(join(ROOT, "references")); walk(join(ROOT, "engine", "src")); walk(join(ROOT, "engine", "tools"));
-  const cited = [...new Set(M.flatMap((m) => `${m.build} ${m.not} ${m.move}`.match(/[A-Za-z0-9-]+\.(?:ts|mjs|md)\b/g) ?? []))], missing = cited.filter((f) => !have.has(f));
+  const cited = [...new Set([...M.map((m) => `${m.build} ${m.not} ${m.move}`), ...(DECK.calls ?? []).map((c) => `${c.where} ${c.call} ${c.use}`), ...(DECK.refused ?? []).map((r) => `${r.why} ${r.instead}`)].flatMap((t) => t.match(/[A-Za-z0-9-]+\.(?:ts|mjs|md)\b/g) ?? []))], missing = cited.filter((f) => !have.has(f));
   say(!missing.length, `all ${cited.length} files the cards cite exist${missing.length ? `   missing: ${missing.join(", ")}` : ""}`);
   say(!/\u2014/.test(JSON.stringify(DECK)), "no em dashes in the deck");
+  // names: every card has everyday names, every name leads to one place, and the common ones resolve
+  const C = DECK.calls ?? [], R = DECK.refused ?? [];
+  say(M.every((m) => Array.isArray(m.aka) && m.aka.length >= 1 && m.aka.every((a) => typeof a === "string" && a.trim())), "every card lists at least one everyday name (aka)");
+  say(C.length >= 3 && C.every((c) => c.id && c.where && c.call && c.use && c.aka?.length) && R.length >= 6 && R.every((r) => r.name && r.why?.length > 20 && r.instead && r.aka?.length), "every engine call says where and how, every refused name says why and what to make instead");
+  { const seen = new Map(), dup = []; for (const e of entries()) for (const n of new Set(e.names.map(norm))) { if (seen.has(n) && seen.get(n) !== e.id) dup.push(`${n.trim()} (${seen.get(n)}, ${e.id})`); seen.set(n, e.id); }
+    say(!dup.length, `no name leads to two places${dup.length ? `   ${dup.slice(0, 4).join("; ")}` : ""}`); }
+  { const grammar = readFileSync(join(ROOT, "references", "motion-grammar.md"), "utf8"), table = grammar.slice(grammar.indexOf("## Names we refuse")), missing = R.filter((r) => !table.includes(`| ${r.name} |`));
+    say(grammar.includes("## Names we refuse") && !missing.length, `motion-grammar.md's "Names we refuse" table holds every refused name${missing.length ? `   missing: ${missing.map((r) => r.name).join(", ")}` : ""}`); }
+  { const named = R.flatMap((r) => r.instead.match(/\b(?:open|seam|cam|reveal|type|act|emph|close|time)-[a-z-]+[a-z]/g) ?? []), bad = named.filter((id) => !ids.includes(id));
+    say(named.length >= 6 && !bad.length, `every card a refused name points to exists (${named.length})${bad.length ? `   missing: ${bad.join(", ")}` : ""}`); }
+  const ROUTES = [["whip pan", "cam-whip-to-rest"], ["mask reveal", "reveal-from-behind"], ["Vertigo", "cam-vertigo-realisation"], ["a dolly zoom", "cam-vertigo-realisation"], ["the vertigo effect", "cam-vertigo-realisation"],
+    ["speed ramp", "time-ramp-at-peak"], ["slow-mo", "time-ramp-at-peak"], ["freeze frame", "time-freeze-and-name"], ["J-cut", "seam-sound-leads"], ["l cut", "seam-sound-leads"], ["rack focus", "cam-rack-of-attention"],
+    ["pop-in", "act-settle"], ["count-up", "reveal-count-during"], ["zoom in", "call-lens"], ["crash zoom", "call-lens"], ["dolly in", "cam-slow-push"], ["circle wipe", "call-iris"], ["smash cut", "call-flash-cut"],
+    ["typewriter", "call-typewriter"], ["can you do a whip pan to the cat", "cam-whip-to-rest"], ["glitch", "glitch"], ["Lens Flare", "lens flare"], ["fade in", "fade-in"], ["crossfade", "cross dissolve"], ["confetti", "particle burst"], ["shine", "light sweep"]];
+  const wrong = ROUTES.filter(([q, id]) => find(q)[0]?.id !== id).map(([q, id]) => `"${q}" -> ${find(q)[0]?.id ?? "nothing"} (want ${id})`);
+  say(!wrong.length, `${ROUTES.length} everyday names resolve to the right card, call or refusal${wrong.length ? `   ${wrong.join("; ")}` : ""}`);
+  say(find("zzqx plorb").length === 0 && find("   ").length === 0, "a name nobody uses finds nothing, and says so");
   const key = (d) => d.map((m) => m.id).join(",");
   say(key(deal({ kind: "story", energy: "high", seconds: 27, seed: 7 })) === key(deal({ kind: "story", energy: "high", seconds: 27, seed: 7 })), "the same seed deals the same hand");
   say(new Set(Array.from({ length: 40 }, (_, s) => key(deal({ kind: "story", energy: "high", seconds: 27, seed: s + 1 })))).size >= 30, "forty seeds deal at least thirty different hands");
@@ -91,5 +138,12 @@ if (isMain(import.meta.url)) {
     const seed = num("--seed", 0, true) ?? (Date.now() % 100000), o = { kind, energy, seconds: num("--seconds", 1) ?? 20, seed, n: num("--n", c ? 1 : 3, true), cat: c, avoid: (val("--avoid") ?? "").split(",").filter(Boolean) }, d = deal(o);
     if (args.includes("--json")) console.log(JSON.stringify({ ...o, cards: d }, null, 1));
     else { console.log(`DECK   seed ${seed}${kind ? ` · ${kind}` : ""}${energy ? ` · ${energy}` : ""}${c ? ` · ${c} only` : ` · ${o.seconds} s`} · ${d.length} cards\n`); console.log(d.map(card).join("\n\n")); console.log(`\nKeep, adapt or drop each card, and say why in the brief. To repeat this deal: --seed ${seed}. To deal the next film a different hand: --avoid ${d.map((m) => m.id).join(",")}`); }
-  } else die("usage: deck.mjs deal|list|test (see the header of this file)");
+  } else if (cmd === "find") {
+    const q = args.filter((a) => a !== "--json").join(" ").trim(); if (!q) die('find takes a name: deck.mjs find "whip pan"');
+    const all = find(q), top = all[0], hits = all.filter((r) => r.score >= Math.max(5, (top?.score ?? 0) / 2)).slice(0, 5);
+    if (args.includes("--json")) console.log(JSON.stringify({ query: q, found: hits.map(({ kind, id, via, item }) => ({ kind, id, via, ...item })) }, null, 1));
+    else if (!hits.length) console.log(`FIND   "${q}": no card, call or refused name goes by that. List the deck with deck.mjs list, or describe the move in plain words in the brief.`);
+    else { console.log(`FIND   "${q}" · ${hits.length} ${hits.length === 1 ? "match" : "matches"}, best first\n`); console.log(hits.map(showFound).join("\n\n")); console.log(`\nA card is a prompt, never an order: its numbers are the default unless the person named their own (workflows/start-here.md).`); }
+    if (!hits.length) process.exit(1);
+  } else die("usage: deck.mjs deal|list|find|test (see the header of this file)");
 }

@@ -87,6 +87,20 @@ export const audio = filmSfx(filmAudio(score, 15), plan);   // Film.audio: score
 - One master at the very end: a look-ahead true-peak ceiling at -1 dBTP (`ceilingDb`). The score
   arrives already mastered, so nothing is renormalised.
 
+## Sound across a cut (J-cut and L-cut)
+
+The cheapest smooth seam works on the ear: the sound crosses the cut ahead of the picture or
+behind it. In a **J-cut** the next scene is heard before it is seen, 0.3 to 0.8 s early (the
+pond's bubbles under the last shot of the room, the nib scratching before the page appears). In an
+**L-cut** the last scene is still heard 0.5 to 1.5 s into the next (a page still rustling, a pile
+of bricks still settling). The ear makes the join first, so the picture cut lands as an answer. It
+uses the same cue table: cue the incoming scene's sound at `CUT - lead` (`{ frame: CUT - 15, kind:
+"bubble" }`), or let the outgoing one run past the cut with a longer `lengthS` or its own
+tail. The score can do it too, entering its next section a beat before the cut
+(a pre-lap), or letting the old chord ring over the first beat of the new scene. This never moves
+a hit: a contact's sound stays on its own frame (Land on the frame, below). What crosses the cut
+is a place's sound, never an event's. Deck card `seam-sound-leads`.
+
 ## Levels and the audibility rule
 
 A cue nobody hears is a bug, not a subtle choice. A test that only checks a cue exists proves
