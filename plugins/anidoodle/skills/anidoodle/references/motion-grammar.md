@@ -145,8 +145,8 @@ roughest. The difference is arithmetic, and `engine/src/canvas-core/seams.ts` do
   The incoming shot owns the cut frame: the outgoing shot's last frame on screen is the one
   before it, and that is its fastest.
 - **Through the cut, in depth.** `matchedZoom({ push, exitF, entryF })` does the same for a
-  camera that flies into one shot and out in the next. A zoom is a ratio, so both sides run in
-  log space and grow at the same rate per frame across the cut. With the default push the
+  camera that flies into one shot and out in the next: a dolly push through the cut. A push is a
+  ratio, so both sides run in log space and grow at the same rate per frame across the cut. With the default push the
   incoming shot opens at about two thirds of its size, so its scene must be painted that much
   wider than the frame; a zoom that would open it under 0.4 is refused.
 - **There is a top speed.** Past about two and a half frame widths a second
@@ -194,12 +194,12 @@ offer the alternative; `deck.mjs find` prints the same reason.
 
 | Name | Why not | Make instead |
 |---|---|---|
-| glitch | colour split and torn pixels need `ctx.filter` or pixel tricks the contract forbids | a cut on the beat, or one shake on a real impact |
+| glitch | colour split and torn pixels are a template overlay with no cause in the picture | a cut on the beat, or one shake on a real impact |
 | light sweep | a shine sliding over chrome that nothing in the picture casts | `reveal-by-light`: the light belongs to the world |
-| fade-in | marks are made, not faded; the first tell on the craft bar | drawn on, revealed from behind, or written |
+| fade-in | marks are made, not faded or scaled up from nothing; a tell on the craft bar | drawn on, revealed from behind, or written |
 | particle burst | decoration with no force behind it, never a default | `emph-contact`: dust or splash born on a real contact |
-| cross dissolve | two copies of one thing, each half there, read as a ghost | one object moving and changing mid-trip; the gentle move |
-| lens flare | lens faults painted onto a drawing read as stock overlays | one named light in the scene, or `reveal-by-light` |
+| cross dissolve | two copies of one thing read as a ghost; unrelated pictures, a slideshow join (a poster frame or a reduced-motion fallback may still dissolve) | one object moving and changing mid-trip; the gentle move |
+| lens flare | lens artefacts (flare, leaks, bokeh discs) painted onto a drawing read as stock overlays | one named light in the scene, or `reveal-by-light` |
 
 ## Callouts and the label handoff
 

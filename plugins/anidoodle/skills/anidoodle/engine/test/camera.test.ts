@@ -76,15 +76,15 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
   const lc = new Camera([540, 540], [{ f: 0, look: [0, 0], zoom: 1 }, { f: 60, lens: 1 }, { f: 120, lens: 4 }]);
   ok(near(lc.at(90).lens!, 2) && near(lc.at(90).zoom, 1) && near(lc.at(0).lens!, 1), "lens keys ease in log2 like the dolly (midpoint of 1 -> 4 is 2) and hold before their first key");
   ok(JSON.stringify(Object.keys(cam.at(45))) === JSON.stringify(["look", "zoom"]), "a camera that never sets a lens answers exactly as before (no lens field)");
-  lc.shake({ from: 0, to: 30, amp: 10, seed: 3 });
+  lc.shake({ from: 80, to: 110, amp: 10, seed: 3 }); // inside the lens move, so the lens is not 1 where the shake is measured
   let lensErr = 0, lensTrip = 0, shakePx = 0;
-  for (const f of [5, 70, 100]) for (const z of [0, 1.5, -0.25]) {
+  for (const f of [5, 70, 85, 100]) for (const z of [0, 1.5, -0.25]) {
     lc.begin(g, f, z); const [a, b, c, d, e, ff] = T; lc.end(g);
     for (const q of [[0, 0], [300, -120]] as P[]) { const s = lc.toScreen(q, f, z), m = [a * q[0] + c * q[1] + e, b * q[0] + d * q[1] + ff]; lensErr = Math.max(lensErr, Math.hypot(s[0] - m[0], s[1] - m[1])); const w = lc.toWorld(s, f, z); lensTrip = Math.max(lensTrip, Math.hypot(w[0] - q[0], w[1] - q[1])); }
   }
-  { const sh = lc.shaken(5), cl = lc.at(5), [dx, dy] = lc.shakeAt(5); shakePx = Math.hypot((cl.look[0] - sh.look[0]) * heroScale(sh) - dx, (cl.look[1] - sh.look[1]) * heroScale(sh) - dy); }
+  { const sh = lc.shaken(85), cl = lc.at(85), [dx, dy] = lc.shakeAt(85); shakePx = Math.hypot((cl.look[0] - sh.look[0]) * heroScale(sh) - dx, (cl.look[1] - sh.look[1]) * heroScale(sh) - dy); }
   ok(lensErr < 1e-6 && lensTrip < 1e-6, "with a lens, begin() and toScreen() still agree and toWorld inverts them");
-  ok(shakePx < 1e-9 && lc.shaken(70).lens !== undefined, "shake stays in screen px under a lens, and the shaken camera keeps its lens");
+  ok(lc.at(85).lens! > 1.2 && Math.hypot(...lc.shakeAt(85).slice(0, 2) as [number, number]) > 0.5 && shakePx < 1e-9 && lc.shaken(70).lens !== undefined, "shake stays in screen px under a lens, and the shaken camera keeps its lens");
 
   // 9. the dolly zoom: the hero plane holds its size while the depth stretches
   const dolly = new Camera([540, 540], [{ f: 0, look: [0, 0], zoom: 1 }, { f: 60, zoom: 3 }]), vz = dollyZoom((f) => dolly.at(f));
@@ -104,6 +104,8 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
   ok(throws(() => new Camera([0, 0], [])), "rejects a camera with neither keys nor path");
   ok(throws(() => cam.shake({ from: 10, to: 10, amp: 1, seed: 1 })), "rejects an empty shake window");
   ok(throws(() => monoPath([[0, 1], [0, 2]])), "monoPath rejects non-increasing keys");
+  { const extra = new Camera([0, 0], [], { path: () => ({ look: [0, 0], zoom: 1, extra: 1 } as unknown as Cam) }); ok(JSON.stringify(Object.keys(extra.shaken(0))) === JSON.stringify(["look", "zoom", "rot"]), "shaken() returns only the camera's own fields"); }
+  ok(throws(() => new Camera([0, 0], [{ f: 0, zoom: Infinity }])), "rejects an endless zoom");
   ok(throws(() => new Camera([0, 0], [{ f: 0, zoom: 1, lens: 0 }])) && throws(() => new Camera([0, 0], [{ f: 0, zoom: 1, lens: NaN }])) && throws(() => new Camera([0, 0], [{ f: 0, zoom: NaN }])), "rejects a lens <= 0, or a lens or zoom that is not a number");
   ok(throws(() => dollyZoom((f) => dolly.at(f), { hold: 0 })) && throws(() => dollyZoom(() => ({ look: [0, 0], zoom: 0 }))), "dollyZoom refuses a size of 0 to hold, or a dolly at zoom 0");
 };

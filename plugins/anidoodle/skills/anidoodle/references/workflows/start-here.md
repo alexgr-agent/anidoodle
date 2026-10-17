@@ -43,7 +43,9 @@ an overshoot) and **what moves** (which element, camera or layer). Fill only wha
 every part they left open, the card's own numbers are the default, written down and marked as
 defaults: "whip pan (cam-whip-to-rest) · 0.4 to 0.7 s, card default · peak under the speed
 ceiling, card default · the camera, onto the cat, theirs". A vague ask becomes a spec someone can
-check against the render.
+check against the render. When `find` returns an engine call, there are no card numbers: record
+the four parts with your own numbers, marked as yours. When it returns a refusal, tell the person
+the reason in one line, record the alternative you will build, and let them veto it.
 
 ## Defaults when they do not say
 

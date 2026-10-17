@@ -43,27 +43,30 @@ export const deal = ({ kind, energy, seconds = 20, seed = 1, n, cat, avoid = [] 
 // FIND. People ask for a move by the name they know ("a whip pan", "do the Vertigo thing"). Each card's
 // aka, the deck's calls and its refused names hold those names; find routes the words to what anidoodle
 // builds, or to the reason it will not and what it makes instead, so nothing is improvised from a word.
-const STOP = new Set(["a", "an", "the", "please", "do", "make", "me", "some", "use", "add", "like", "effect", "shot", "move", "thing"]);
+const STOP = new Set(["a", "an", "the", "please", "do", "make", "me", "some", "use", "add", "like", "effect", "shot", "move", "thing", "in", "out", "up", "to", "on", "of", "into", "at", "can", "you"]);
+const KIND_ORDER = { card: 0, call: 1, refused: 2 };
 export const norm = (x) => ` ${String(x).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
 const entries = () => [
   ...DECK.moves.map((m) => ({ kind: "card", id: m.id, names: [m.id, ...(m.aka ?? [])], item: m })),
   ...(DECK.calls ?? []).map((c) => ({ kind: "call", id: c.id, names: [c.id, ...c.aka], item: c })),
   ...(DECK.refused ?? []).map((r) => ({ kind: "refused", id: r.name, names: [r.name, ...r.aka], item: r })),
 ];
-/** Every entry whose names match the words, best first: an exact name, a name inside the words, the words inside a name, then shared words. */
+/** Every entry whose names match the words, best first: an exact name, a name inside the words, the words inside a name, then shared
+ *  words (scored on the share of both the asked words and the name's words, so a long name does not win on one common word).
+ *  Ties go to the longer matched name, then card before engine call before refusal. Ids match exactly or inside the words only. */
 export const find = (query) => {
   const q = norm(query), words = q.trim().split(" ").filter((w) => w && !STOP.has(w)), out = [];
   if (!q.trim()) return out;
   for (const e of entries()) {
     let best = 0, via = "";
-    for (const n of e.names) {
-      const a = norm(n), aw = a.trim().split(" ");
-      const score = a === q ? 100 : q.includes(a) ? 50 + aw.length : a.includes(q) ? 30 : words.length ? (10 * words.filter((w) => aw.includes(w)).length) / words.length : 0;
-      if (score > best) { best = score; via = n; }
+    for (const [i, n] of e.names.entries()) {
+      const a = norm(n), aw = a.trim().split(" ").filter((w) => !STOP.has(w)), hit = words.filter((w) => aw.includes(w)).length;
+      const score = a === q ? 100 : q.includes(a) ? 50 + aw.length : a.includes(q) ? 30 : i > 0 && words.length && aw.length ? 5 * (hit / words.length + hit / aw.length) : 0;
+      if (score > best || (score === best && score > 0 && n.length > via.length)) { best = score; via = n; }
     }
     if (best >= 5) out.push({ kind: e.kind, id: e.id, score: best, via, item: e.item });
   }
-  return out.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+  return out.sort((a, b) => b.score - a.score || b.via.length - a.via.length || KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.id.localeCompare(b.id));
 };
 const showFound = (r) => r.kind === "card" ? `${card(r.item)}\n    (matched "${r.via}")`
   : r.kind === "call" ? `  ${r.id}   [engine call · ${r.item.where}]\n    ${r.item.call}\n    ${r.item.use}\n    (matched "${r.via}")`
@@ -91,12 +94,12 @@ const selfTest = () => {
     say(!dup.length, `no name leads to two places${dup.length ? `   ${dup.slice(0, 4).join("; ")}` : ""}`); }
   { const grammar = readFileSync(join(ROOT, "references", "motion-grammar.md"), "utf8"), table = grammar.slice(grammar.indexOf("## Names we refuse")), missing = R.filter((r) => !table.includes(`| ${r.name} |`));
     say(grammar.includes("## Names we refuse") && !missing.length, `motion-grammar.md's "Names we refuse" table holds every refused name${missing.length ? `   missing: ${missing.map((r) => r.name).join(", ")}` : ""}`); }
-  { const named = R.flatMap((r) => r.instead.match(/\b(?:open|seam|cam|reveal|type|act|emph|close|time)-[a-z-]+[a-z]/g) ?? []), bad = named.filter((id) => !ids.includes(id));
+  { const named = R.flatMap((r) => r.instead.match(/\b(?:open|seam|cam|reveal|type|act|emph|close)-[a-z-]+[a-z]/g) ?? []), bad = named.filter((id) => !ids.includes(id));
     say(named.length >= 6 && !bad.length, `every card a refused name points to exists (${named.length})${bad.length ? `   missing: ${bad.join(", ")}` : ""}`); }
   const ROUTES = [["whip pan", "cam-whip-to-rest"], ["mask reveal", "reveal-from-behind"], ["Vertigo", "cam-vertigo-realisation"], ["a dolly zoom", "cam-vertigo-realisation"], ["the vertigo effect", "cam-vertigo-realisation"],
-    ["speed ramp", "time-ramp-at-peak"], ["slow-mo", "time-ramp-at-peak"], ["freeze frame", "time-freeze-and-name"], ["J-cut", "seam-sound-leads"], ["l cut", "seam-sound-leads"], ["rack focus", "cam-rack-of-attention"],
-    ["pop-in", "act-settle"], ["count-up", "reveal-count-during"], ["zoom in", "call-lens"], ["crash zoom", "call-lens"], ["dolly in", "cam-slow-push"], ["circle wipe", "call-iris"], ["smash cut", "call-flash-cut"],
-    ["typewriter", "call-typewriter"], ["can you do a whip pan to the cat", "cam-whip-to-rest"], ["glitch", "glitch"], ["Lens Flare", "lens flare"], ["fade in", "fade-in"], ["crossfade", "cross dissolve"], ["confetti", "particle burst"], ["shine", "light sweep"]];
+    ["speed ramp", "emph-time-ramp"], ["slow-mo", "emph-time-ramp"], ["freeze frame", "type-freeze-and-name"], ["J-cut", "seam-sound-leads"], ["l cut", "seam-sound-leads"], ["rack focus", "cam-rack-of-attention"],
+    ["count-up", "reveal-count-during"], ["zoom in", "call-lens"], ["crash zoom", "call-lens"], ["dolly in", "cam-slow-push"], ["circle wipe", "call-iris"], ["smash cut", "seam-cut-on-beat"], ["flash cut", "call-flash-cut"],
+    ["typewriter", "call-typewriter"], ["can you do a whip pan to the cat", "cam-whip-to-rest"], ["glitch", "glitch"], ["Lens Flare", "lens flare"], ["fade in", "fade-in"], ["cross-fade", "cross dissolve"], ["dolly zoom in", "cam-vertigo-realisation"], ["slow zoom", "cam-slow-push"], ["masked reveal", "reveal-from-behind"], ["cut", "seam-cut-on-beat"], ["fade out", "fade-in"], ["fade to black", "fade-in"], ["pop-in", "fade-in"], ["time lapse", "reveal-drawn-on"], ["slow pan across the city", "cam-parallax-travel"], ["tilt up", "cam-parallax-travel"], ["fast motion", "call-time-remap"], ["rewind", "call-time-remap"], ["on twos", "call-on-twos"], ["bloom", "call-gentle-move"], ["jcut", "seam-sound-leads"], ["depth of field", "cam-rack-of-attention"], ["bokeh", "lens flare"], ["zoom out to reveal the city", "cam-pull-back-reveal"], ["confetti", "particle burst"], ["shine", "light sweep"]];
   const wrong = ROUTES.filter(([q, id]) => find(q)[0]?.id !== id).map(([q, id]) => `"${q}" -> ${find(q)[0]?.id ?? "nothing"} (want ${id})`);
   say(!wrong.length, `${ROUTES.length} everyday names resolve to the right card, call or refusal${wrong.length ? `   ${wrong.join("; ")}` : ""}`);
   say(find("zzqx plorb").length === 0 && find("   ").length === 0, "a name nobody uses finds nothing, and says so");
@@ -143,7 +146,7 @@ if (isMain(import.meta.url)) {
     const all = find(q), top = all[0], hits = all.filter((r) => r.score >= Math.max(5, (top?.score ?? 0) / 2)).slice(0, 5);
     if (args.includes("--json")) console.log(JSON.stringify({ query: q, found: hits.map(({ kind, id, via, item }) => ({ kind, id, via, ...item })) }, null, 1));
     else if (!hits.length) console.log(`FIND   "${q}": no card, call or refused name goes by that. List the deck with deck.mjs list, or describe the move in plain words in the brief.`);
-    else { console.log(`FIND   "${q}" · ${hits.length} ${hits.length === 1 ? "match" : "matches"}, best first\n`); console.log(hits.map(showFound).join("\n\n")); console.log(`\nA card is a prompt, never an order: its numbers are the default unless the person named their own (workflows/start-here.md).`); }
+    else { console.log(`FIND   "${q}" · ${hits.length} ${hits.length === 1 ? "match" : "matches"}, best first\n`); console.log(hits.map(showFound).join("\n\n")); if (hits.some((r) => r.kind === "card")) console.log(`\nA card is a prompt, never an order: its numbers are the default unless the person named their own (workflows/start-here.md).`); }
     if (!hits.length) process.exit(1);
   } else die("usage: deck.mjs deal|list|find|test (see the header of this file)");
 }

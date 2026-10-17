@@ -57,4 +57,8 @@ export const run = (ok: (cond: boolean, label: string) => void) => {
   ok(throws(() => timeRemap([{ f: 30, speed: 1 }, { f: 30, speed: 2 }])) && throws(() => timeRemap([{ f: 3.5, speed: 1 }])) && throws(() => timeRemap([{ f: -1, speed: 1 }])), "keys on repeated, fractional or negative frames are refused");
   ok(throws(() => timeRemap([{ f: 30, speed: 0.5, ramp: 20 }, { f: 40, speed: 1 }])) && throws(() => timeRemap([{ f: 30, speed: 0.5, ramp: -2 }])), "a ramp that runs past the next key, or a negative ramp, is refused");
   ok(throws(() => timeRemap([{ f: 30, speed: 0.5, curve: "bounce" as "smooth" }])), "an unknown ramp curve is refused");
+  ok(throws(() => timeRemap([{ f: 30, speed: 1e-9 }])) && throws(() => timeRemap([{ f: 30, speed: 0.005 }])), "a speed so slow it looks frozen is refused: declare a freeze instead");
+  ok(timeRemap([{ f: 0, speed: 0, ramp: 10, keepsMoving: "dust" }, { f: 10, speed: 1 }]).freezes.length === 0, "a ramp that fills the gap to the next key lists no empty freeze");
+  { let msg = ""; try { timeRemap([{ f: 5, speed: 1 }, { f: 3, speed: 2 }]); } catch (e) { msg = String(e); } ok(msg.includes("must increase"), "keys out of order are reported as out of order"); }
+  ok(throws(() => t.at(Infinity)) && throws(() => t.at(NaN)) && throws(() => t.speedAt(NaN)), "a frame that is not a number is refused");
 };

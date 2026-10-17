@@ -92,14 +92,15 @@ export const audio = filmSfx(filmAudio(score, 15), plan);   // Film.audio: score
 The cheapest smooth seam works on the ear: the sound crosses the cut ahead of the picture or
 behind it. In a **J-cut** the next scene is heard before it is seen, 0.3 to 0.8 s early (the
 pond's bubbles under the last shot of the room, the nib scratching before the page appears). In an
-**L-cut** the last scene is still heard 0.5 to 1.5 s into the next (a page still rustling, a pile
-of bricks still settling). The ear makes the join first, so the picture cut lands as an answer. It
-uses the same cue table: cue the incoming scene's sound at `CUT - lead` (`{ frame: CUT - 15, kind:
-"bubble" }`), or let the outgoing one run past the cut with a longer `lengthS` or its own
-tail. The score can do it too, entering its next section a beat before the cut
-(a pre-lap), or letting the old chord ring over the first beat of the new scene. This never moves
-a hit: a contact's sound stays on its own frame (Land on the frame, below). What crosses the cut
-is a place's sound, never an event's. Deck card `seam-sound-leads`.
+**L-cut** the last scene is still heard 0.5 to 1.5 s into the next (a page still rustling, a pen
+still scratching). The ear makes the join first, so the picture cut lands as an answer. It uses
+the same cue table: cue the incoming scene's sound at `CUT - lead` (`{ frame: CUT - 15, kind:
+"bubble" }`). To carry the outgoing sound past the cut, give it a longer `lengthS` where the kind
+takes one (scratch, paper, whoosh, swish, riser, thread); for the others, place a few quieter cues
+of that scene's sound after the cut. The score can do it too, entering its next section a beat
+before the cut (a pre-lap), or letting the old chord ring over the first beat of the new scene.
+This never moves a hit: a contact's sound stays on its own frame (Land on the frame, below). What
+crosses the cut is a scene's ongoing sound, never a hit's. Deck card `seam-sound-leads`.
 
 ## Levels and the audibility rule
 
@@ -138,8 +139,9 @@ nothing: test that it is heard over the music at its own moment.
   press, an arrival, a landing, the reveal. Picture changes that are only edits stay silent. Count
   your cues against the film's length; if you cannot say what each one marks, cut it.
 - **Land on the frame.** A hit belongs on the frame where the thing happens; within a frame either
-  side reads as one event. A soft lead into the hit reads as anticipation. A sound after its picture
-  reads as lag, which is the one error a viewer always notices.
+  side reads as one event. A soft lead into the hit reads as anticipation. A hit's sound after its
+  picture reads as lag, which is the one error a viewer always notices. (A place's sound may run
+  past a cut: Sound across a cut, above.)
 - **One voice per job.** Every press of every button is the same click, at the same level, so the UI
   feels like one object. Variety goes to the story moments, not to repeats of the same action.
 - **The ending breathes.** The music settles on the tonic or lets its last chord ring, a beat of

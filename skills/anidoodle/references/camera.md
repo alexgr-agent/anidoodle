@@ -50,8 +50,9 @@ Two different moves make the subject bigger, and directors name them apart:
 
 - **A dolly** moves the camera: the `zoom` key, distance D = 1/zoom. Near planes grow faster than
   far ones, so the depth changes as it goes. This is a push-in, a pull-back, a dolly in or out.
-- **A lens zoom** changes the focal length with the camera standing still: the `lens` key
-  (default 1). It multiplies every plane by the same factor about the frame's centre, so nothing
+- **A lens zoom** changes the focal length with the camera standing still: the `lens` key (1
+  when no key sets it; once one does, frames before the first lens key hold that key's value, so
+  key `lens: 1` where the zoom starts, as below). It multiplies every plane by the same factor about the frame's centre, so nothing
   shifts against anything else; the picture is magnified, flat. A crash zoom or punch-in is this.
   It reads as an operator's or a documentary's move, more noticed than a dolly. Use it when that
   is the voice; for travelling into a world, dolly.
@@ -59,7 +60,7 @@ Two different moves make the subject bigger, and directors name them apart:
   every frame so the hero plane keeps its size, and the planes behind stretch away (dolly in) or
   loom (dolly out). The subject holds still in a world that has just changed shape: the moment of
   realisation (deck card `cam-vertigo-realisation`). It needs at least two planes behind the
-  subject; with nothing behind it, it is only a zoom.
+  subject; with nothing behind it, nothing visibly happens.
 
 ```ts
 import { Camera, dollyZoom, heroScale } from "./camera";
@@ -70,8 +71,8 @@ const vertigo = new Camera(c, [], { path: dollyZoom((f) => dolly.at(f)) }); // h
 // dollyZoom(path, { hold: 1.5 }) holds a given scale; { at: 30 } holds the scale the path has at frame 30
 ```
 
-`heroScale(cam)` is the hero plane's screen scale (dolly times lens), and `weight(cam)` follows
-it, so a lens zoom thins the line just as a dolly does.
+`heroScale(cam)` is the hero plane's screen scale (dolly times lens), and the line-weight
+compensation `weight(cam)` follows it, for a lens zoom as for a dolly.
 
 ## Time: speed ramps, slow motion, freeze frames
 
@@ -92,18 +93,18 @@ name(g, f);                 // the writing, on the film's own frame
 cues.push({ frame: t.filmFrameOf(LANDING), kind: "paper" }); // a sound on a remapped event
 ```
 
-- **A ramp eases the speed**, on a smoothstep, so it starts and ends with no kick; `ramp: 0` is a
-  deliberate hard change. A slowed scene is asked for frames between its frames, so it must
+- **A ramp eases the speed**, on a smoothstep (or `curve: "linear"`), so it starts and ends with
+  no kick. `ramp` defaults to 0, a deliberate hard change of speed; give it frames to glide. A slowed scene is asked for frames between its frames, so it must
   draw at fractional time (motion is a function of time, never of a frame counter).
 - **Score and sound stay on real time.** The score never slows; effects are cued by film frame.
   `filmFrameOf(sceneFrame)` gives the first film frame that shows a scene event, which is where
   its sound goes.
 - **A freeze must keep something moving.** A `speed: 0` key without `keepsMoving` (in words)
-  throws: a frozen frame with nothing moving is dead air, and the gate fails it. Drive the thing
+  throws, and so does a speed under 0.01 (`MIN_SPEED`), which looks frozen without saying so: a frozen frame with nothing moving is dead air, and the gate fails it. Drive the thing
   that moves (the name being written, the camera still creeping in) from the film's frame `f`.
   `t.freezes` lists each stop with what keeps moving.
 - **Once a film for each.** One slow motion at the peak, one freeze on the telling pose (deck
-  cards `time-ramp-at-peak`, `time-freeze-and-name`). The second halves the first.
+  cards `emph-time-ramp`, `type-freeze-and-name`). The second halves the first.
 
 ## Shake
 

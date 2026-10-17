@@ -28,7 +28,7 @@
 
 export type TimeKey = {
   f: number;              // the film frame this speed starts from (whole, increasing)
-  speed: number;          // scene frames per film frame from here on: 1 real time, 0.25 slow motion, 0 a freeze, 2 fast
+  speed: number;          // scene frames per film frame from here on: 1 real time, 0.25 slow motion, 0 a freeze, 2 fast (0 or at least MIN_SPEED)
   ramp?: number;          // frames over which the speed glides from the old value to this one (default 0, a hard change)
   curve?: "smooth" | "linear"; // the glide's shape: smoothstep (default; no kick at either end) or a straight line
   keepsMoving?: string;   // required when speed is 0: what still moves, on the film's frame, through the freeze
@@ -51,15 +51,23 @@ const CURVES = {
   linear: { e: (u: number) => u, area: (u: number) => (u * u) / 2 },
 } as const;
 
+/** The slowest a scene may run without being a freeze. Below it the world looks stopped, so it must be a declared freeze. */
+export const MIN_SPEED = 0.01;
+
 type Seg = { f: number; from: number; to: number; ramp: number; curve: (typeof CURVES)["smooth"]; t0: number };
 
 export const timeRemap = (keys: readonly TimeKey[]): TimeRemap => {
   let last = -1, prevSpeed = 1;
   const segs: Seg[] = [], freezes: Freeze[] = [];
+  // the frames first, all of them, so a later check never reports a symptom of keys out of order
   for (const [i, k] of keys.entries()) {
     if (!Number.isInteger(k.f) || k.f < 0) throw new Error(`timeRemap: key ${i} is at frame ${k.f}; keys sit on whole film frames from 0`);
     if (k.f <= last) throw new Error(`timeRemap: keys must increase (${last} then ${k.f})`);
+    last = k.f;
+  }
+  for (const [i, k] of keys.entries()) {
     if (!Number.isFinite(k.speed) || k.speed < 0) throw new Error(`timeRemap: speed at frame ${k.f} must be a number of 0 or more (got ${k.speed}); time never runs backwards`);
+    if (k.speed > 0 && k.speed < MIN_SPEED) throw new Error(`timeRemap: speed ${k.speed} at frame ${k.f} looks frozen; use speed 0 with keepsMoving, or at least ${MIN_SPEED}`);
     const ramp = k.ramp ?? 0, curve = k.curve ?? "smooth", next = keys[i + 1]?.f;
     if (!Number.isFinite(ramp) || ramp < 0) throw new Error(`timeRemap: ramp at frame ${k.f} must be 0 or more frames (got ${ramp})`);
     if (!(curve in CURVES)) throw new Error(`timeRemap: curve at frame ${k.f} is "smooth" or "linear" (got ${curve})`);
@@ -68,12 +76,13 @@ export const timeRemap = (keys: readonly TimeKey[]): TimeRemap => {
     // scene time at this key: the previous segment's area up to here
     const t = segs.length ? sceneAt(segs[segs.length - 1], k.f) : k.f;
     segs.push({ f: k.f, from: prevSpeed, to: k.speed, ramp, curve: CURVES[curve], t0: t });
-    if (k.speed === 0) freezes.push({ from: k.f + ramp, to: next ?? Infinity, keepsMoving: k.keepsMoving!.trim() });
-    prevSpeed = k.speed; last = k.f;
+    if (k.speed === 0 && (next ?? Infinity) > k.f + ramp) freezes.push({ from: k.f + ramp, to: next ?? Infinity, keepsMoving: k.keepsMoving!.trim() });
+    prevSpeed = k.speed;
   }
   const segAt = (f: number): Seg | undefined => { let s: Seg | undefined; for (const x of segs) { if (x.f <= f) s = x; else break; } return s; };
-  const at = (f: number): number => { const s = segAt(f); return s ? sceneAt(s, f) : f; };
+  const at = (f: number): number => { if (!Number.isFinite(f)) throw new Error(`timeRemap: frame must be a number (got ${f})`); const s = segAt(f); return s ? sceneAt(s, f) : f; };
   const speedAt = (f: number): number => {
+    if (!Number.isFinite(f)) throw new Error(`timeRemap: frame must be a number (got ${f})`);
     const s = segAt(f); if (!s) return 1;
     const x = f - s.f; return s.ramp > 0 && x < s.ramp ? s.from + (s.to - s.from) * s.curve.e(x / s.ramp) : s.to;
   };
@@ -87,6 +96,7 @@ export const timeRemap = (keys: readonly TimeKey[]): TimeRemap => {
       if (tail && tail.to === 0) throw new Error(`filmFrameOf: scene frame ${target} is never shown; the film stays frozen at scene frame ${at(hi).toFixed(2)}`);
       const rate = tail ? tail.to : 1; hi += Math.ceil((target - at(hi)) / rate) + 1;
       while (!reached(hi)) hi += Math.ceil(1 / rate) + 1; // guards rounding only
+      if (!Number.isSafeInteger(hi)) throw new Error(`filmFrameOf: scene frame ${target} is past any film frame`);
     }
     while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (reached(mid)) hi = mid; else lo = mid; }
     return hi;

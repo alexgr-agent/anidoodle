@@ -30,7 +30,8 @@
 import { fractal, Gfx, P } from "./core";
 
 // look: world point at the frame's centre; zoom: the dolly, screen px per world unit on the hero plane
-// at lens 1; lens: the focal length as a factor (default 1), scaling every plane equally
+// at lens 1; lens: the focal length as a factor, scaling every plane equally (1 when no key sets it;
+// once one does, frames before the first lens key hold that key's value, so key lens: 1 where it starts)
 export type Cam = { look: P; zoom: number; lens?: number };
 export type EaseName = "linear" | "in" | "out" | "inout";
 export const EASE: Record<EaseName, (u: number) => number> = {
@@ -93,7 +94,7 @@ export const strokeWeight = (c: Cam, exp = 0.35): number => Math.pow(heroScale(c
 export const dollyZoom = (path: (f: number) => Cam, opts: { hold?: number; at?: number } = {}): ((f: number) => Cam) => {
   const hold = opts.hold ?? heroScale(path(opts.at ?? 0)); // the path's own lens counts here; after this the lens is solved
   if (!(hold > 0) || !Number.isFinite(hold)) throw new Error(`dollyZoom: the scale to hold must be a positive number (got ${hold})`);
-  return (f) => { const c = path(f); if (!(c.zoom > 0)) throw new Error(`dollyZoom: zoom must be positive (got ${c.zoom} at frame ${f})`); return { look: c.look, zoom: c.zoom, lens: hold / c.zoom }; };
+  return (f) => { const c = path(f); if (!(c.zoom > 0 && Number.isFinite(c.zoom))) throw new Error(`dollyZoom: zoom must be positive (got ${c.zoom} at frame ${f})`); return { look: c.look, zoom: c.zoom, lens: hold / c.zoom }; };
 };
 
 export class Camera {
@@ -112,14 +113,14 @@ export class Camera {
     for (const k of this.keys) {
       if (!Number.isInteger(k.f) || k.f < 0) throw new Error(`camera key at non-integral or negative frame ${k.f}`);
       if (k.f <= last) throw new Error(`camera keys must increase: ${last} then ${k.f}`);
-      if (k.zoom !== undefined && !(k.zoom > 0)) throw new Error(`camera zoom must be positive, got ${k.zoom} at frame ${k.f}`);
+      if (k.zoom !== undefined && !(k.zoom > 0 && Number.isFinite(k.zoom))) throw new Error(`camera zoom must be positive, got ${k.zoom} at frame ${k.f}`);
       if (k.lens !== undefined && !(k.lens > 0 && Number.isFinite(k.lens))) throw new Error(`camera lens must be a positive number, got ${k.lens} at frame ${k.f}`);
       last = k.f;
     }
   }
 
   // one channel of the keys, eased per segment. Missing values hold the nearest given one, so a
-  // key may set only look or only zoom.
+  // key may set only look, only zoom or only lens.
   private channel(f: number, get: (k: CamKey) => number | undefined, log2: boolean, mono = log2): number {
     const ks = this.keys.map((k, i) => ({ k, v: get(k), i })).filter((e) => e.v !== undefined) as { k: CamKey; v: number; i: number }[];
     if (!ks.length) throw new Error("camera keys never set this channel");
@@ -167,7 +168,9 @@ export class Camera {
   // [dx, dy] is the camera's look point stepping BACK by that much, in world units.
   shaken(f: number): Cam & { rot: number } {
     const c = this.at(f), [dx, dy, dr] = this.shakeAt(f), k = heroScale(c);
-    return { ...c, look: [c.look[0] - dx / k, c.look[1] - dy / k], rot: dr };
+    const out: Cam & { rot: number } = { look: [c.look[0] - dx / k, c.look[1] - dy / k], zoom: c.zoom, rot: dr };
+    if (c.lens !== undefined) out.lens = c.lens;
+    return out;
   }
 
   // plane scale at depth z for a camera state: the hero plane (z = 0) scales by zoom x lens exactly.

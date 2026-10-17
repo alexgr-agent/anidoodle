@@ -9,7 +9,7 @@
 //            a second callout names the full moon from the calm ground under the card, then leaves.
 import type { Ctx, Env, P } from "./core";
 import type { Film } from "./film";
-import { Camera } from "./camera";
+import { Camera, heroScale } from "./camera";
 import { out3, plateLayer, ramp, rr } from "./launchKit";
 import { calloutPose, checkHandoff, drawCallout, drawLabel, type Callout, type LabelPose } from "./callout";
 import { iris, seam } from "./transitions";
@@ -27,7 +27,7 @@ const CARD = { x: 60, y: 300, w: 960, h: 545, sx: 20, sy: 170, sw: 1040, sh: 590
 const full: Callout = { text: "FULL, DAY 15", anchor: () => [CARD.x + ((540 - CARD.sx) / CARD.sw) * CARD.w, CARD.y + ((372 - CARD.sy) / CARD.sh) * CARD.h], label: { p: [610, 960], size: 38 }, t0: 178, out: 250, color: CREAM, accent: GOLD };
 
 const scene1 = (env: Env, f: number) => (c: Ctx) => {
-  const L = plateLayer(env, "calloutdemo:fox", fox, 0, Math.round(W * env.scale * 1.3), true).canvas, o = cam.toScreen([0, 0], f), k = cam.at(f).zoom;
+  const L = plateLayer(env, "calloutdemo:fox", fox, 0, Math.round(W * env.scale * 1.3), true).canvas, o = cam.toScreen([0, 0], f), k = heroScale(cam.at(f));
   c.setTransform(env.scale, 0, 0, env.scale, 0, 0); c.globalAlpha = 1; c.drawImage(L, o[0], o[1], W * k, H * k);
 };
 const scene2 = (env: Env, f: number) => (c: Ctx) => {
