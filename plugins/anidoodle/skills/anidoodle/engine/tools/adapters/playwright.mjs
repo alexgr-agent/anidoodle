@@ -34,7 +34,7 @@ export const open = async ({ pw, browser: found }, pagePath, { scale = 1, worker
     blurHash: (n, samples, w = 0) => pick(w).evaluate(([f, s]) => { window.FILM.blur(f, s); return window.FILM.hash(); }, [n, samples]),
     audio: (sr) => pages[0].evaluate((s) => window.FILM.audio(s), sr),
     // the frame probe (hosts/page.ts): text and content boxes the frame's edge cuts through
-    probe: (frames) => pages[0].evaluate((fs) => window.FILM.probe(fs), frames),
+    probe: (frames, all = false) => pages[0].evaluate(([fs, a]) => window.FILM.probe(fs, a), [frames, all]),
     // keeps the fresh bakes, then closes; returns how many plate frames were stored
     close: async () => { let saved = 0; if (useBakes) for (const p of pages) saved += await saveBakes(p, bv).catch(() => 0); await browser.close(); return saved; },
   };

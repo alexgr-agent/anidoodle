@@ -86,6 +86,24 @@ Render options that hold for every moving format:
 - `--hashes out/x.md5`: the md5 of every frame handed to the encoder, for frame-exact
   comparisons of two renders before any codec blurs the difference.
 
+Words on screen, wherever the shape:
+
+- **Reading time.** Each text stays up at least `max(0.7 s, 0.3 s per word)`. A launch film's cues
+  are `meta.captions`; `node tools/framecheck.mjs <name>` fails any cue held shorter and reports
+  `N/A` for a film that declares no cues (it cannot see words it was not told about).
+- **No text on a busy picture without a plate** (`craft-bar.md`).
+- **Phone safe zones, 9:16 only.** Reels, TikTok and Shorts lay their own name, caption, buttons
+  and progress bar over the frame. Keep text and key content out of the top 14 % and bottom 25 %
+  of the height, and the right 14 % of the width (the button column) between them. The shares are
+  the cautious end of the creator safe-area guidance those apps publish for vertical video,
+  rounded up; their layouts change, so re-check before a campaign. `framecheck.mjs` finds text in
+  those zones on any 9:16 frame (`SAFE-ZONES`); on `launch.mjs ship` it is a FLAG that does not
+  fail the shape, because the launch template's phone layouts are a chat window across the whole
+  frame; `--strict-zones` makes it fail. Other shapes report N/A. Burned-in captions
+  (`captions: "burn"`) sit in the bottom zone by design: for those feeds, ship the sidecar.
+- **Claims** in a film, on screen or spoken, are listed with their sources in `facts.json`
+  (`workflows/facts.md`).
+
 After any encode, `node tools/verify-export.mjs <name> [--first-frame #hex] [--fidelity-psnr 40]`
 proves the file on disk is the film: size, exact frame count, duration, the score (an audio
 stream exactly when the film has one, as long as the picture, not silent), its SYNC (the decoded

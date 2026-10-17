@@ -129,9 +129,11 @@ export const mountFilm = (film: Film) => {
   // THE FRAME PROBE (tools/framecheck.mjs). For each frame asked, every line of text (fillText on the
   // frame or a full-frame sheet, writeOn, setType) and every content box the art core reports
   // (probeRect: a card, a window) is collected in device pixels; a box the frame's edge cuts through
-  // is returned. Whatever lies wholly outside the frame, or wholly inside it, is fine.
-  const probe = (frames: number[]) => {
-    const out: (ProbeRec & { frame: number })[] = [], g = globalThis as { __ANIDOODLE_PROBE__?: (r: ProbeRec) => void };
+  // is returned. Whatever lies wholly outside the frame, or wholly inside it, is fine. With `all`, every
+  // visible line of text is returned too (cut: false when whole), for the checks that judge where
+  // text sits (the 9:16 safe zones, textrules.mjs).
+  const probe = (frames: number[], all = false) => {
+    const out: (ProbeRec & { frame: number; cut?: boolean })[] = [], g = globalThis as { __ANIDOODLE_PROBE__?: (r: ProbeRec) => void };
     const protos = [CanvasRenderingContext2D.prototype, ...(typeof OffscreenCanvasRenderingContext2D !== "undefined" ? [OffscreenCanvasRenderingContext2D.prototype] : [])] as unknown as { fillText: (t: string, x: number, y: number, w?: number) => void }[];
     const orig = protos.map((p) => p.fillText);
     let frame = 0, recs: ProbeRec[] = [];
@@ -147,7 +149,7 @@ export const mountFilm = (film: Film) => {
     try {
       for (frame of frames) {
         recs = []; seek(frame); const W = canvas.width, H = canvas.height, tol = 1.5;
-        for (const r of recs) { const inter = r.x1 > 0 && r.x0 < W && r.y1 > 0 && r.y0 < H, inside = r.x0 >= -tol && r.y0 >= -tol && r.x1 <= W + tol && r.y1 <= H + tol; if (inter && !inside) out.push({ ...r, frame }); }
+        for (const r of recs) { const inter = r.x1 > 0 && r.x0 < W && r.y1 > 0 && r.y0 < H, inside = r.x0 >= -tol && r.y0 >= -tol && r.x1 <= W + tol && r.y1 <= H + tol; if (inter && !inside) out.push({ ...r, frame }); else if (all && inter && r.kind === "text") out.push({ ...r, frame, cut: false }); }
       }
     } finally { protos.forEach((p, i) => (p.fillText = orig[i] as never)); delete g.__ANIDOODLE_PROBE__; }
     return out;

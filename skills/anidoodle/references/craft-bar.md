@@ -34,6 +34,15 @@ Check it with the tool AND by eye: a creeping camera changes every pixel and sat
 while the eye sees a still.
 
 
+**Words get time to be read, and a quiet ground.** A text stays on screen at least
+`max(0.7 s, 0.3 s per word)`: "ART OUT." needs 0.7 s, a six-word line 1.8 s. Count from the frame
+the last word is whole, and give a slower audience (children, a second language) more. Text is
+never set over a busy picture without a plate under it: a solid or softly tinted panel, a scrim, or
+a clear patch of the drawing, so every letter has a ground it can be read against. Squint at the
+frame; if a letter disappears, the plate is missing. `framecheck.mjs` holds the first rule on every
+declared text cue (`meta.captions`) and reports N/A for a film that declares none; the second is a
+review finding (`workflows/review.md`), because only an eye can judge busy.
+
 **Judge the design, not only the collisions.** A review still can have nothing overlapping and
 still fail: no hierarchy, cramped spacing, a frame that would not pass as a poster. Look at each
 review frame as a designer first, a checker second.
