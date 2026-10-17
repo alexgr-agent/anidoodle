@@ -21,7 +21,8 @@ that invents its subject draws a mascot of a product, not the product.
    components, the live page. Note the two or three REAL features a viewer should recognise on
    screen, the exact product name and mark, the brand colours as hex.
 2. **Collect approved claims.** The one-line promise and any numbers come from their own
-   materials (site copy, release notes, README), each with its source next to it. Anything you
+   materials (site copy, release notes, README), each with its source next to it, in `facts.json`
+   (`facts.md`; `launch.mjs new` scaffolds it). Anything you
    cannot source becomes a question, not a line in the film. List the claims the film must NOT make.
 3. **Ask the grounding questions**, one message: which features to show (recommend your three),
    which shapes to ship, where it will run, the exact CTA lines.
@@ -170,14 +171,15 @@ into place), round iris seams, the product's own UI. Pick one per film; never mi
 5. **Music as an mp3 on a page**, heard by a human. ✋ Approval.
 6. **Cut as data**: content scenes on one timeline, the cut as `pic`/`type` segments on the
    beat grid (`launchCut.ts`). Re-timing edits the list, never scene code.
-7. **Review from the render**: contact sheets per beat, cuts as before/after pairs, DESIGN
-   first (type over art, spacing, hierarchy), then timing. Render only the changed range
+7. **Review from the render, by a fresh critic** (`review.md`, three rounds at most): contact
+   sheets, cuts as before/after pairs, DESIGN first (type over art, spacing, hierarchy), then timing. Render only the changed range
    (`render.mjs --from F --to T` writes `out/<film>.<F>-<T>.mp4`, silent). Give notes in camera words ("slow this zoom to 0.7x",
    "hold the word 10 frames longer"), never "make it better".
 8. **QA**: review every shape's contact sheet against the design checklist in
    `launch-video-kit.md` (no clipped type, no edge-cropped content, balanced per shape, coherent
    content). `launch.mjs ship <film> --shapes ... --gate` runs, for EVERY shape shipped, `framecheck`
-   (text and cards whole on every frame), the gate
+   (text and cards whole on every frame; each text up long enough to read; on 9:16 nothing under
+   the phone UI; `craft-bar.md`), `facts.mjs` (every claim sourced, `facts.md`), the gate
    (determinism, contract, dead air; declare real holds in `meta.holds`, each with its reason)
    and `verify-export --delivery` (size, frames, score, sync, true peak, a legible frame 0), and
    writes the poster and captions; add `verify-export <film>-<shape> --first-frame #rrggbb` for a

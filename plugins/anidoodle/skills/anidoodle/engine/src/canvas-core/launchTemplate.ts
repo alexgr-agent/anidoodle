@@ -88,6 +88,7 @@ export type LaunchSpec = {
   sfx?: boolean;             // sound cues from the picture's timing (default true; false = the score alone)
   motif?: boolean;           // the relay into the end card (default true): the drop becomes the mark's dot
   captions?: "sidecar" | "burn"; // .srt/.vtt only (default), or also burned into their own band (phone shapes)
+  claims?: string[];         // any other on-screen or narrated claim (a number in the UI, a spoken line); the words, split words and tagline are claims already
 };
 
 // the clean preset: a quiet canvas, one accent, type as the design. Our own palette, drawn for it.
@@ -137,6 +138,7 @@ export type LaunchFilm = Omit<Film, "reshape"> & {
   seams: Seam[];         // the motif's seams, each checked (checkRelay)
   timing: { base: number; len: number; tin: number; b: number; down: number; up: number; drop: Drop; times: number[] }[]; // each ask's own timing, content frames at 30 fps
   captions: { from: number; to: number; text: string }[]; // = meta.captions
+  claims: string[];      // every claim the film makes, each to be listed in facts.json with its source (tools/facts.mjs)
 };
 export const makeLaunchFilm = (spec: LaunchSpec): LaunchFilm => {
   const fps = spec.fps ?? 30, m = fps / 30, n = spec.asks.length, shape = spec.shape ?? "16x9", clean = spec.preset === "clean";
@@ -558,6 +560,7 @@ export const makeLaunchFilm = (spec: LaunchSpec): LaunchFilm => {
     assets: { images: {} },
     shots: [{ id: "cut", start: 0, end: cut.N * m, draw }],
     audio,
+    claims: [...new Set([...words.flat().map((x) => x.text), ...spec.asks.flatMap((a) => (isChat(a) ? [] : (a.split ?? []).map((x) => x.text))), spec.tagline, ...(spec.claims ?? [])].map((x) => x.trim()).filter(Boolean))],
     cut, layout: L, cues, seams, heroPx: HERO ? HERO.TEXT.px : null, timing: T, captions: caps.map((c) => ({ from: Math.round(c.from * m), to: Math.round(c.to * m), text: c.text })),
     // the same film composed for another frame shape (one timeline: the cut, the timing and the sound do not change)
     reshape: (s: string) => { if (s === shape) return self; memo ??= new Map(); let f = memo.get(s); if (!f) { f = makeLaunchFilm({ ...spec, shape: s as Shape }); memo.set(s, f); } return f; },

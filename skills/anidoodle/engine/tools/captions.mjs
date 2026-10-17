@@ -12,12 +12,13 @@ import { requireFilm, splitShape } from "./names.mjs";
 import { toSrt, toVtt } from "./avsync.mjs";
 import { isMain } from "./is-main.mjs";
 
-export const filmMeta = async (name) => {
+export const loadFilm = async (name) => {
   const { base, shape } = splitShape(name);
   const js = (await build({ stdin: { contents: `export { ${base} as film } from "./src/canvas-core/${base}";`, resolveDir: process.cwd(), loader: "ts" }, bundle: true, format: "esm", write: false, platform: "neutral", plugins: [overlay], logLevel: "error" })).outputFiles[0].text;
   const { film } = await import("data:text/javascript;base64," + Buffer.from(js).toString("base64"));
-  return (shape ? film.reshape(shape) : film).meta;
+  return shape ? film.reshape(shape) : film;
 };
+export const filmMeta = async (name) => (await loadFilm(name)).meta;
 export const writeCaptions = async (name, out = `out/${name}`) => {
   const meta = await filmMeta(name), caps = meta.captions ?? [];
   if (!caps.length) return { count: 0, files: [] };

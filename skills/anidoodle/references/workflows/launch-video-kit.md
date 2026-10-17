@@ -20,8 +20,9 @@ node tools/launch.mjs ship myLaunch --shapes 16x9,1x1,9x16 --blur auto --gate
 `ship` renders every shape to `out/myLaunch-<shape>.mp4`, writes its poster (`.poster.png`, the
 film's own legible frame) and its captions (`.srt`, `.vtt`), runs `verify-export --delivery` on each
 file (size, frames, score, A/V sync at every marker, the true peak after the encode, a legible frame
-0), `framecheck.mjs` on every frame (no text, no card, no product window cut by the frame's edge)
-and, with `--gate`, the gate; one table at the end, exit 1 if any shape fails.
+0), `framecheck.mjs` on every frame (no text, no card, no product window cut by the frame's edge;
+text held long enough to read; on 9:16 no text in the phone zones), `facts.mjs` once (every claim
+sourced) and, with `--gate`, the gate; one table at the end, exit 1 if any shape fails.
 
 ### Design review checklist (every shape, before anything ships)
 
@@ -31,6 +32,13 @@ contact sheet of EVERY shape against this list, and fix, never waive:
 - **No clipped type.** Every word a viewer reads is whole on every frame: the typed prompt, the
   bubbles, the labels, the words, the install lines. `framecheck.mjs` (run by `ship`) fails any
   line of text the frame's edge cuts through.
+- **Time to read.** Each text up at least `max(0.7 s, 0.3 s per word)`, and never over a busy picture
+  without a plate (`craft-bar.md`). `framecheck.mjs` fails a declared cue held too briefly.
+- **Phone safe zones on 9:16.** No text in the top 14 %, the bottom 25 % or the right 14 % of the
+  frame, where the platforms put their own interface (`formats.md`). `ship` flags it per shape;
+  `--strict-zones` fails it.
+- **Every claim sourced.** The words, the tagline and any extra `claims` in the spec are listed in
+  `facts.json` with their source sentence and URL or file (`workflows/facts.md`); `ship` checks it.
 - **No edge-cropped content.** A card, a product window, a film's card sits whole in the frame
   with a margin, unless it is a deliberate full-bleed (the whole frame is that one thing). What
   the camera is about to cut fades before it does. `framecheck.mjs` checks the cards and windows.
@@ -146,6 +154,7 @@ many subframes as each frame's measured on-screen speed needs (1 on a still fram
 | `words[i]` | the type frame after `asks[i]` (not after the last ask; it flows into the end card) |
 | `tagline`, `install[]`, `footer` | the end card; install lines are shown exactly as given |
 | `bpm` (required), `fps` (30 or 60), `askBeats`, `typeBeats`, `endBeats` | the beat grid (a beat is 60 x 30 / bpm frames at 30 fps) and each part's length in beats |
+| `claims` | extra on-screen or narrated claims for `facts.json`; the words, split words and tagline are claims already |
 | `claimBar` | land the end card on this bar's downbeat, counting from bar 0 (`claimBar: 4` = frame 4 x bar); throws if it cannot. A longer last ask is really longer, never slowed |
 | `score` (required) or `audio` | the score composed for this product (the `Material` function compose.md writes, or a `Piece`), as a bed; `null` for silence; or your own finished mix (not checked; it replaces the cues too) |
 | `shape`, `preset`, `sfx`, `motif`, `captions` | the frame (16x9 default); the look (drawn, clean); sound cues (default on); the relay into the end card (default on); `"sidecar"` (default) or `"burn"` |

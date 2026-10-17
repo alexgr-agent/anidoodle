@@ -6,11 +6,12 @@ the facts come before any drawing.
 
 ## The research ledger (before the storyboard)
 
-For every claim the piece makes: the claim in one sentence, the source (URL or exact passage),
-your confidence, and what you are simplifying. A claim you cannot source is cut or clearly shown
-as a metaphor. Numbers on screen come from the ledger, and each carries its source in a comment
-beside the code that draws it. Record the audience (age band, expertise) because it sets the
-reading level and the pace.
+The ledger is the film's `facts.json` (`facts.md`, for any film that makes claims). For every
+claim the piece makes: the claim, the exact source sentence and its URL or file. Beside it in
+your notes: your confidence, and what you are simplifying. A claim you cannot source is cut or
+clearly shown as a metaphor. Numbers on screen come from the ledger, and each carries its source
+in a comment beside the code that draws it. Record the audience (age band, expertise) because it
+sets the reading level and the pace.
 
 ## The storyboard (`STORYBOARD.md`)
 
@@ -25,8 +26,8 @@ review when the person wants that step; otherwise build from it.
   on, never faded in. The drawing process (`drawing-process.md`) is the explainer's best tool:
   the diagram assembling IS the explanation.
 - **Captions are drawn lettering** (`lettering.ts`, `drafting.ts`, a style's own hand), sized for
-  the smallest shape the piece ships in. Keep them short enough to read twice in their time on
-  screen.
+  the smallest shape the piece ships in. Each stays up at least max(0.7 s, 0.3 s per word), and
+  longer for a young or non-expert audience (`craft-bar.md`).
 - **A mechanism beats a diagram.** When the idea has moving parts, build it as a real machine that
   comes apart and reads out its own state, in whichever style the piece uses: `machines.md`.
 - **A recurring guide** (a mascot, a hand, an object) gives continuity across chapters; build it

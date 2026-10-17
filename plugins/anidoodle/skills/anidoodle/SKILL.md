@@ -36,7 +36,7 @@ say why in one line. Write the answers into a short brief before drawing.
 | A loop, sticker, animated logo, ambient header | Loop workflow below, `references/formats.md` |
 | A story film, any length | Film workflow below, `references/workflows/long-film.md` |
 | An explainer or infographic; a machine that comes apart to explain an idea, in any style | `references/workflows/explainer.md`, `references/workflows/machines.md` |
-| A launch or product video (their screenshots welcome) | `references/workflows/launch-video.md`; build it on `references/workflows/launch-video-kit.md` |
+| A launch or product video (their screenshots welcome) | `references/workflows/launch-video.md`; build it on `references/workflows/launch-video-kit.md`; its claims: `references/workflows/facts.md` |
 | Art for a site (hero by a headline, tiles, spots, share card) on its page colour and brand; or a web animation that reacts to the UI | `references/workflows/site-art.md`; `references/workflows/interactive.md` |
 | A drawing lesson, or "how do I draw this?" | `references/workflows/teach-drawing.md` |
 | A character kept identical in any style (woodcut to toy brick) | `references/workflows/character-consistency.md`, `references/anatomy.md` |
@@ -82,9 +82,9 @@ longer films, a spine plus one line per chapter. If you cannot write it, stop. (
 a beat is 60 x fps / bpm frames, the bpm from the brief's score; one cue table holds every frame number and a checker
 runs at load. (3) **Real reference** for anything that exists. (4) **ONE look still**, the hardest
 frame, critiqued in writing. ✋ **Approval.** (5) **ONE 8-second music sample.** ✋ **Approval.**
-(6) **Build the whole film**; mechanical checks run continuously. (7) **Review once** from the
-rendered file, as four readings with a scorecard (`references/workflows/review.md`). One ranked fix
-list, one rebuild. (8) ✋ **Final approval.** Say what you verified and what you cannot.
+(6) **Build the whole film**; mechanical checks run continuously. (7) **A fresh critic reviews, never you**
+(`references/workflows/review.md`): after the storyboard, each scene and the full render, a new subagent that saw none of the building returns ranked, timestamped problems and a verdict. Fix the biggest, a NEW critic rechecks; 3 rounds at most, logged in `ledger.md`.
+(8) ✋ **Final approval.** Say what you verified and what you cannot.
 
 Three approval gates at most. Approval is a budget; spend it where being wrong is expensive.
 
@@ -125,7 +125,7 @@ node <skill>/engine/tools/soundfetch.mjs get piano rooms  # on their yes (piano 
 | `registry.mjs` / `gallery.mjs` | the style list from the plates themselves / the gallery sheet |
 | `docs-check.mjs` | fails when any doc's style count, length or path disagrees with the code |
 | `verify-export.mjs` | QA on the rendered file: frames, duration, score, A/V sync, true peak after the encode; opt-in first frame, loop seam, `--delivery` |
-| `launch.mjs` | a launch film: `new <name>` scaffolds the spec; `ship <name> --shapes 16x9,9x16` renders, posters, captions, verifies and framechecks each (`framecheck.mjs`: no text cut by the frame's edge) |
+| `launch.mjs` | a launch film: `new <name>` scaffolds the spec; `ship <name> --shapes 16x9,9x16` renders, posters, captions, verifies and framechecks each (`framecheck.mjs`: text whole, up long enough to read, clear of the 9:16 phone zones) and checks `facts.json` (`facts.mjs`) |
 | `test.mjs` (`npm test`) | unit suites in `engine/test/`, no browser |
 | `music.mjs` | `vocab` prints a style's vocabulary; `check` gates your composed score (key, master, guards, stems, novelty, which parts played recordings) and prints its shape (ARC); `render`, `meter` |
 | `soundfetch.mjs` | the sound pack: `list`, `get <id...\|all>`, `where`, `verify`, `remove <id>` |
